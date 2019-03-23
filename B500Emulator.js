@@ -3,7 +3,7 @@
 
 */
 
-var worker = new Worker ('B500Processor.js');
+var worker = new Worker ('./B500Processor.js');
 
 
 //------------------------------------------------------------------------------
