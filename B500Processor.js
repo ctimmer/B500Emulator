@@ -1,36 +1,69 @@
-/*
-
-
+/*------------------------------------------------------------------------------
+** B500Processor.js 
+**------------------------------------------------------------------------------
+**
+** Operations implemented (and lightly tested)
+**
+**   Arithmatic Instructions
+** ADD
+** SUBTRACT
+** MULTIPLY
+** DIVIDE
+**
+**   Control Instructions
+** ADDRESS MODIFICATION
+** COMPARE EQUAL
+** COMPARE UNEQUAL
+** BRANCH
+** NO-OPERATION
+** HALT AND BRANCH
+**
+**   Editing Instructions
+** TRANSFER
+** TRANSFER ZONE
+** DATA COMPRESS - untested
+** DATA EXPAND - untested
+** MASK - incomplete
+**
+**   Card input/output instructions (yes)
+**   Print output instructions (yes)
+**   Sorter Reader instructions (probably not)
+**   Magnetic Tape instructions (yes)
+**   Paper Tape instructions (? same as mag tape, almost)
+**   Disk File instructions (yes)
+**   Data Communication instructions (maybe)
+**
+**------------------------------------------------------------------------------
+**
 */
-
-//importScripts ('workerFakeDOM.js') ;
-
-//importScripts('jquery-3.3.1.min.js');
 
 "use strict"
 
+const DEBUG = true ;
 const memory_size = 19200 ;
-const GEQ = 'g' ;
-const LEQ = 'l' ;
-const NEQ = 'n' ;
-const TAPE_MARK = 't' ;
+const ASCII_GEQ = 'g' ;
+const ASCII_LEQ = 'l' ;
+const ASCII_NEQ = 'n' ;
+const GROUP_MARK = 't' ;
 const instruction_length = 12 ;
 const section_length = 120 ;
 const field_length = 12 ;
-const COMPARE_OFF = 0x00 ;
-const COMPARE_EQUAL = 0x01 ;
-const COMPARE_LOW = 0x02 ;
-const COMPARE_HIGH = 0x04 ;
+const CONDITION_OFF = 0x00 ;
+const CONDITION_EQUAL = 0x01 ;
+const CONDITION_LOW = 0x02 ;
+const CONDITION_HIGH = 0x04 ;
+const DEFAULT_INSTRUCTION_MICROSECONDS = 100 ;
 
 //------------------------------------------------------------------------------
+// B500Processor
 //------------------------------------------------------------------------------
 function B500Processor ()
 {
 this.test_program
-    = "61 130      001x00000050000ABCDEFGHIJtWXYZ            SIZE >"
+    = "61 130      250J0000J3J0000ABCDEFGHIJtWXYZ            SIZE >"
     + " 12                                                         "
     + "                                                705010   01@"
-    + "34701001401@705010   01561 180      705010   01561 200      "
+    + "J  100010   705010   01561 180      705010   01561 200      "
     + "705010   01561 220      705010   01561 240      705010   015"
     + "61 260      705010   01561 280      705010   01561 300      "
     + "705010   01561 320      705010   01561 340      705010   015"
@@ -345,21 +378,22 @@ this.sense_switches =
     'sense_switch_4':false ,
     'sense_switch_3':false ,
     'sense_switch_2':false ,
-    'sense_switch_1':false ,
+    'sense_switch_1':false 
     } ;
 
-this.comparison_indicator = COMPARE_OFF ;
+this.conditional = CONDITION_OFF ;
 this.instruction_idx = 0 ;
 this.instruction_idx_next = 0 ;
 this.current_instruction =      // Used by op handlers
     {
-    address: '   ' ,
+    address: [] ,
     op: ' ' ,
     m: ' ' ,
     n: ' ' ,
-    aaa: '   ' ,
-    bbb: '   ' ,
-    ccc: '   ' ,
+    aaa: [] ,
+    bbb: [] ,
+    ccc: [] ,
+    microseconds: 0
     } ;
 this.bcd =
     [
@@ -378,7 +412,7 @@ this.bcd =
     {ascii: "?"} ,
     {ascii: ":"} ,
     {ascii: ">"} ,
-    {ascii: GEQ} ,
+    {ascii: ASCII_GEQ} ,
     {ascii: "+"} ,              // 0x10
     {ascii: "A"} ,
     {ascii: "B"} ,
@@ -394,7 +428,7 @@ this.bcd =
     {ascii: "&"} ,
     {ascii: "("} ,
     {ascii: "<"} ,
-    {ascii: TAPE_MARK} ,    // control <-
+    {ascii: GROUP_MARK} ,   // control <-
     {ascii: "x"} ,          // Control  0x20        
     {ascii: "J"} ,
     {ascii: "K"} ,
@@ -410,7 +444,7 @@ this.bcd =
     {ascii: "-"} ,
     {ascii: ")"} ,
     {ascii: ";"} ,
-    {ascii: LEQ} ,
+    {ascii: ASCII_LEQ} ,
     {ascii: " "} ,              // 0x30
     {ascii: "/"} ,
     {ascii: "S"} ,
@@ -423,7 +457,7 @@ this.bcd =
     {ascii: "Z"} ,
     {ascii: ","} ,
     {ascii: "%"} ,
-    {ascii: NEQ} ,
+    {ascii: ASCII_NEQ} ,
     {ascii: "="} ,
     {ascii: "]"} ,
     {ascii: '"'}    // Double quote
@@ -439,7 +473,6 @@ this.initialize () ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.initialize = function ()
 {
-//alert ("initialize") ;
 var idx ;
 
 this.console_initialize () ;
@@ -457,20 +490,28 @@ for (idx = 0 ; idx < memory_size ; idx++)
 
 for (idx = 0 ; idx < 64 ; idx++)
     {
-    this.bcd [idx].op_function = this.invalid_operation.bind (this) ; // All bad op cd
+    this.bcd [idx].op_function
+		= this.invalid_operation.bind (this) ; // Init ops to all bad
     }
 
-this.bcd [0x01].op_function = this.add_operation.bind (this) ;      // "1"
-//this.bcd [0x05].op_function = this.compare_operation.bind (this) ;  // "5"
-this.bcd [0x04].op_function = this.divide_operation.bind (this) ;   // "4"
-this.bcd [0x06].op_function = this.branch_operation.bind (this) ;   // "6"
-this.bcd [0x07].op_function = this.transfer_operation.bind (this) ;   // "7"
-this.bcd [0x09].op_function = this.halt_operation.bind (this) ;     // "9"
-this.bcd [0x03].op_function = this.multiply_operation.bind (this) ; // "3"
 this.bcd [0x00].op_function = this.nop_operation.bind (this) ;      // "0"
-this.bcd [0x30].op_function = this.nop_operation.bind (this) ;      // " "
+this.bcd [0x01].op_function = this.add_operation.bind (this) ;      // "1"
 this.bcd [0x02].op_function = this.subtract_operation.bind (this) ; // "2"
+this.bcd [0x03].op_function = this.multiply_operation.bind (this) ; // "3"
+this.bcd [0x04].op_function = this.divide_operation.bind (this) ;   // "4"
+this.bcd [0x05].op_function = this.compare_operation.bind (this) ;  // "5"
+this.bcd [0x06].op_function = this.branch_operation.bind (this) ;   // "6"
+this.bcd [0x07].op_function = this.transfer_operation.bind (this) ; // "7"
+this.bcd [0x08].op_function = this.mask_operation.bind (this) ;     // "8"
+this.bcd [0x09].op_function = this.halt_operation.bind (this) ;     // "9"
+this.bcd [0x0A].op_function = this.card_read_operation.bind (this) ; // "#"
+this.bcd [0x11].op_function = this.print_operation.bind (this) ;	// "A"
+this.bcd [0x21].op_function = this.address_modify_operation.bind (this) ; // "J"
+this.bcd [0x24].op_function = this.data_compress_operation.bind (this) ; // "M"
+this.bcd [0x25].op_function = this.data_expand_operation.bind (this) ; // "N"
 this.bcd [0x27].op_function = this.transfer_zone_operation.bind (this) ; // "P"
+this.bcd [0x30].op_function = this.nop_operation.bind (this) ;		// " "
+this.bcd [0x33].op_function = this.interrogate_operation.bind (this) ; // "T"
 
 this.import_ascii (this.test_program ,
 		    this.index_to_address (0) ,
@@ -634,6 +675,28 @@ this.console_update ({'id':'central_processor_light',
 } // update_central_processor_light //
 
 //------------------------------------------------------------------------------
+// set_conditional
+//------------------------------------------------------------------------------
+B500Processor.prototype.set_conditional = function
+    (val)		// <0 low, >0 high, otherwise equal
+{
+
+if (val < 0)
+    {
+    this.conditional = CONDITION_LOW ;
+    }
+else if (val > 0)
+    {
+    this.conditional = CONDITION_HIGH ;
+    }
+else
+    {
+    this.conditional = CONDITION_EQUAL ;
+    }
+
+} // set_conditional //
+
+//------------------------------------------------------------------------------
 // index_to_address
 //------------------------------------------------------------------------------
 B500Processor.prototype.index_to_address = function (idx)
@@ -740,10 +803,6 @@ for (bcd_count = 0 ; bcd_count < bcd_length ; bcd_count++)
     {
     int_ret *= 10 ;
     int_ret += this.memory [mem_idx] & 0x0f ;
-//self.postMessage ({'action':'alert', 'alert':
-//'int_ret:' + int_ret.toString ()
-//+ '  mem:' + (this.memory [mem_idx] & 0xf).toString ()
-//}) ;
     mem_idx++ ;
     }
 if (this.memory [mem_idx - 1] & 0x20)		// B bit sign
@@ -769,17 +828,10 @@ var int_work = Math.abs (int_in) ;
 var mem_idx = (this.address_to_index (addr) + bcd_length) - 1 ;
 var bcd_count ;
 
-self.postMessage ({'action':'alert','alert':'int_in:' + int_in.toString()}) ;
 for (bcd_count = 0 ; bcd_count < bcd_length ; bcd_count++)
     {
-self.postMessage ({'action':'alert','alert':'mod:' + (int_work%10).toString()}) ;
     this.memory [mem_idx] = (int_work % 10) & 0x0f ;
     int_work = Math.floor (int_work / 10) ;
-self.postMessage ({'action':'alert',
-'alert':
-'i_to_b:' + this.memory[mem_idx].toString ()
-//'i_to_b:' + this.ascii_to_bcd [this.memory[mem_idx]]
-}) ;
     mem_idx-- ;
     }
 
@@ -789,6 +841,38 @@ if (int_in < 0)
     }
 
 } // integer_to_bcd //
+
+//------------------------------------------------------------------------------
+// compare_characters
+//------------------------------------------------------------------------------
+B500Processor.prototype.compare_characters = function
+    (
+    from_addr ,
+    to_addr ,
+    comp_length ,
+    bit_pattern		// 0x3f - char, 0x0f - num, 0x30 - zone
+    )
+{
+var from_idx = this.address_to_index (from_addr) ;
+var to_idx = this.address_to_index (to_addr) ;
+var comp_count ;
+var comp_result = 0 ;
+
+for (comp_count = 0 ; comp_count < comp_length ; comp_count++)
+    {
+    comp_result = (this.memory [from_idx] & bit_pattern)
+		- (this.memory [to_idx] & bit_pattern) ;
+    if (comp_result != 0)
+	{
+	break ;		// not equal
+	}
+    to_idx++ ;
+    from_idx++ ;
+    }
+
+this.set_conditional (comp_result) ;
+
+} // compare_characters //
 
 //------------------------------------------------------------------------------
 // transfer_characters
@@ -1016,6 +1100,7 @@ this.memory_address_display (this.current_instruction.address) ;
 this.memory_data_display (this.current_instruction.address) ;
 this.console_refresh () ;
 
+this.current_instruction.microseconds = 0 ;	// execution time us
 this.bcd [this.current_instruction.op].op_function () ;
 if (this.single_instruction)
     {
@@ -1036,6 +1121,7 @@ var addend_length = this.current_instruction.m & 0x0f ;
 var augend_length = this.current_instruction.n & 0x0f ;
 var addend ;
 var augend ;
+var sum ;
 
 if (addend_length <= 0)
     {
@@ -1050,18 +1136,53 @@ if (augend_length <= 0)
 augend = this.bcd_to_integer (this.current_instruction.bbb,
 				augend_length) ;
 
-self.postMessage ({'action':'alert',
-'alert':
-addend.toString () + ':' + addend_length.toString ()
-+ ' ' + augend.toString () + ':' + augend_length.toString ()
-}) ;
-augend += addend ;
+sum = augend + addend ;
 
-this.integer_to_bcd (augend,
+this.integer_to_bcd (sum ,
 			this.current_instruction.ccc,
 			Math.max (addend_length, augend_length)) ;
 
+this.set_conditional (sum) ;
+
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+
 } // add_operation //
+
+//------------------------------------------------------------------------------
+// address_modify_operation
+//------------------------------------------------------------------------------
+B500Processor.prototype.address_modify_operation = function ()
+{
+var increment ;
+var addr_idx ;
+var mod_addr ;
+var mod_addr_idx ;
+
+increment = (((this.current_instruction.aaa[0] & 0x0f) * 10)
+            + (this.current_instruction.aaa[1] & 0x0f)) * 12
+            + (this.current_instruction.aaa[2] & 0x0f) ;
+if (increment == 0)
+    {
+    increment = 1200 ;
+    }
+
+addr_idx = this.address_to_index (this.current_instruction.bbb) ;
+mod_addr = 
+    [
+    this.memory [addr_idx] ,
+    this.memory [addr_idx + 1] ,
+    this.memory [addr_idx + 2]
+    ] ;
+mod_addr_idx = this.address_to_index (mod_addr) + increment ;
+mod_addr  = this.index_to_address (mod_addr_idx) ;
+this.memory [addr_idx] = mod_addr [0] ;
+this.memory [addr_idx + 1] = mod_addr [1] ;
+this.memory [addr_idx + 2] = mod_addr [2] ;
+//this.mem_dump_message (this.current_instruction.bbb, 3) ;
+
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+
+} // address_modify_operation //
 
 //------------------------------------------------------------------------------
 // branch_operation
@@ -1073,41 +1194,245 @@ if (this.current_instruction.m & 0x01)
     {				    // Branch unconditional
     this.instruction_idx_next
 	= this.address_to_index (this.current_instruction.aaa) ;
+    this.current_instruction.microseconds += 42 ;
     }
 else
     {				    // Branch conditional
-    if (this.comparison_indicator & COMPARE_LOW)
+    if (this.conditional & CONDITION_LOW)
 	{
 	this.instruction_idx_next
 	    = this.address_to_index (this.current_instruction.aaa) ;
 	}
-    else if (this.comparison_indicator & COMPARE_EQUAL)
-	{
-	this.instruction_idx_next
-	    = this.address_to_index (this.current_instruction.bbb) ;
-	}
-    else if (this.comparison_indicator & COMPARE_HIGH)
+    else if (this.conditional & CONDITION_HIGH)
 	{
 	this.instruction_idx_next
 	    = this.address_to_index (this.current_instruction.ccc) ;
 	}
+    else //if (this.conditional & CONDITION_EQUAL)
+	{
+	this.instruction_idx_next
+	    = this.address_to_index (this.current_instruction.bbb) ;
+	}
+    this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
     }
 
 } // branch_operation //
+
+//------------------------------------------------------------------------------
+// card_read_operation
+//------------------------------------------------------------------------------
+B500Processor.prototype.card_read_operation = function ()
+{
+//var not_ready_idx = this.address_to_index (this.current_instruction.aaa) ;
+//var eof_idx = this.address_to_index (this.current_instruction.bbb) ;
+var input_idx = this.address_to_index (this.current_instruction.ccc) ;
+
+
+this.set_conditional (0) ;
+
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+
+} // card_read_operation //
 
 //------------------------------------------------------------------------------
 // compare_operation
 //------------------------------------------------------------------------------
 B500Processor.prototype.compare_operation = function ()
 {
+var comp_length = this.current_instruction.n & 0x0f ;
+var bit_pattern ;	// 0x3f - char, 0x0f - num, 0x30 - zone
+var branch_type = 1 ;	// 1 - equal, 2 - unequal
+
+if (comp_length <= 0)
+    {
+    comp_length = 12 ;
+    }
+
+switch (this.current_instruction.m & 0x0f)
+    {
+    case 0x00 :			// char =
+	bit_pattern = 0x3f ;
+	break ;
+    case 0x01 :			// zone =
+	bit_pattern = 0x30 ;
+	break ;
+    case 0x02 :			// num =
+	bit_pattern = 0x0f ;
+	break ;
+    case 0x04 :			// char !=
+	bit_pattern = 0x3f ;
+	branch_type = 2 ;
+	break ;
+    case 0x05 :			// zone !=
+	bit_pattern = 0x30 ;
+	branch_type = 2 ;
+	break ;
+    case 0x06 :			// num !=
+	bit_pattern = 0x0f ;
+	branch_type = 2 ;
+	break ;
+    default :
+	return ;	// Fault
+	break ;
+    }
+
+
+this.compare_characters
+    (
+    this.address_to_index (this.current_instruction.aaa) ,
+    this.address_to_index (this.current_instruction.bbb) ,
+    comp_length ,
+    bit_pattern
+    ) ;
+
+if (branch_type == 1)		// Branch if required
+    {
+    if (this.conditional & CONDITION_EQUAL)
+        {			// Equal branch
+	this.instruction_idx_next
+	    = this.address_to_index (this.current_instruction.ccc) ;
+        }
+    }
+else
+    {
+    if (this.conditional & (! CONDITION_EQUAL))
+        {			// Unequal branch
+	this.instruction_idx_next
+	    = this.address_to_index (this.current_instruction.ccc) ;
+        }
+    }
+
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 
 } // compare_operation //
+
+//------------------------------------------------------------------------------
+// data_compress_operation
+//------------------------------------------------------------------------------
+B500Processor.prototype.data_compress_operation = function ()
+{
+var from_idx = this.address_to_index (this.current_instruction.aaa) ;
+var to_idx = this.address_to_index (this.current_instruction.ccc) ;
+var record_length = ((this.current_instruction.bbb[0] & 0x0f) * 120)
+					+ ((this.current_instruction.bbb[1] & 0x0f) * 12) 
+					+ (this.current_instruction.bbb[1] & 0x0f) ;
+var from_end_idx = from_idx + record_length ;
+
+while (from_idx < from_end_idx)
+	{
+	this.memory [to_idx] = 0x00 ;
+	this.memory [to_idx] &= (this.memory [from_idx] << 2) & 0x3c ;
+	from_idx ++ ;
+	if (from_idx < from_end_idx)
+		{
+		this.memory [to_idx] &= (this.memory [from_idx] >> 2) & 0x03 ;
+		to_idx++ ;
+		this.memory [to_idx] = 0x00 ;
+		this.memory [to_idx] &= (this.memory [from_idx] << 4) & 0x30 ;
+		from_idx ++ ;
+		if (from_idx < from_end_idx)
+			{
+			this.memory [to_idx] &= (this.memory [from_idx]) & 0x0f ;
+			to_idx++ ;
+			from_idx ++ ;
+			}
+		}
+	}
+
+this.set_conditional (0) ;
+
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+
+} // data_compress_operation //
+
+//------------------------------------------------------------------------------
+// data_expand_operation
+//------------------------------------------------------------------------------
+B500Processor.prototype.data_expand_operation = function ()
+{
+var from_idx = this.address_to_index (this.current_instruction.aaa) ;
+var to_idx = this.address_to_index (this.current_instruction.ccc) ;
+var record_length = ((this.current_instruction.bbb[0] & 0x0f) * 120)
+					+ ((this.current_instruction.bbb[1] & 0x0f) * 12) 
+					+ (this.current_instruction.bbb[1] & 0x0f) ;
+var to_end_idx = to_idx + record_length ;
+
+while (to_idx < to_end_idx)
+	{
+	this.memory [to_idx] = 0x00 ;
+	this.memory [to_idx] &= (this.memory [from_idx] >> 2) & 0x0f ;
+	to_idx++ ;
+	if (to_idx < to_end_idx)
+		{
+		this.memory [to_idx] = 0x00 ;
+		this.memory [to_idx] &= (this.memory [from_idx] << 2) & 0x0c ;
+		from_idx++ ;
+		this.memory [to_idx] &= (this.memory [from_idx] >> 4) & 0x03 ;
+		to_idx++ ;
+		if (to_idx < to_end_idx)
+			{
+			this.memory [to_idx] = 0x00 ;
+			this.memory [to_idx] &= this.memory [from_idx] & 0x0f ;
+			to_idx++ ;
+			from_idx++ ;
+			}
+		}
+	}
+
+this.set_conditional (0) ;
+
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+
+} // data_expand_operation //
 
 //------------------------------------------------------------------------------
 // divide_operation
 //------------------------------------------------------------------------------
 B500Processor.prototype.divide_operation = function ()
 {
+var dividend_length = this.current_instruction.m & 0x0f ;
+var divisor_length = this.current_instruction.n & 0x0f ;
+var quotient_length ;
+var dividend ;
+var divisor ;
+var quotient ;
+var remainder ;
+
+if (dividend_length <= 0)
+    {
+    dividend_length = 12 ;
+    }
+dividend = this.bcd_to_integer (this.current_instruction.aaa,
+				dividend_length) ;
+if (divisor_length <= 0)
+    {
+    divisor_length = 12 ;
+    }
+divisor = this.bcd_to_integer (this.current_instruction.bbb,
+				divisor_length) ;
+if (divisor == 0)
+    {
+    return ;		// fault
+    }
+quotient_length = dividend_length - divisor_length ;
+if (quotient_length <= 0)
+    {
+    return ;		// fault
+    }
+
+quotient = Math.floor (dividend / divisor) ;
+remainder = Math.abs (dividend) % Math.abs (divisor) ;
+
+this.integer_to_bcd (quotient,
+			this.current_instruction.ccc,
+			quotient_length) ;
+this.integer_to_bcd (remainder ,
+			this.current_instruction.aaa,
+			dividend_length) ;
+
+this.set_conditional (quotient) ;
+
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 
 } // divide_operation //
 
@@ -1119,9 +1444,42 @@ B500Processor.prototype.halt_operation = function ()
 
 this.processor_halt = true ;
 
-this.instruction_idx_next = this.address_to_index (this.current_instruction.aaa) ;
+this.instruction_idx_next
+    = this.address_to_index (this.current_instruction.aaa) ;
 
 } // halt_operation //
+
+//------------------------------------------------------------------------------
+// interrogate_operation
+//------------------------------------------------------------------------------
+B500Processor.prototype.interrogate_operation = function ()
+{
+
+
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+
+} // interrogate_operation //
+
+//------------------------------------------------------------------------------
+// mask_operation
+//------------------------------------------------------------------------------
+B500Processor.prototype.mask_operation = function ()
+{
+var from_idx = this.address_to_index (this.current_instruction.aaa) ;
+var mask_idx = this.address_to_index (this.current_instruction.bbb) ;
+var to_idx = this.address_to_index (this.current_instruction.ccc) ;
+var from_length = this.current_instruction.m & 0x0f ;
+
+if (from_length == 0)
+	{
+	from_length = 12 ;
+	}
+
+this.set_conditional (0) ;
+
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+
+} // mask_operation //
 
 //------------------------------------------------------------------------------
 // multiply_operation
@@ -1132,6 +1490,7 @@ var multiplicand_length = this.current_instruction.m & 0x0f ;
 var multiplier_length = this.current_instruction.n & 0x0f ;
 var multiplicand ;
 var multiplier ;
+var product ;
 
 if (multiplicand_length <= 0)
     {
@@ -1146,16 +1505,15 @@ if (multiplier_length <= 0)
 multiplier = this.bcd_to_integer (this.current_instruction.bbb,
 				multiplier_length) ;
 
-self.postMessage ({'action':'alert',
-'alert':
-multiplicand.toString () + ':' + multiplicand_length.toString ()
-+ ' ' + multiplier.toString () + ':' + multiplier_length.toString ()
-}) ;
-multiplier *= multiplicand ;
+product = multiplier * multiplicand ;
 
-this.integer_to_bcd (multiplier,
+this.integer_to_bcd (product,
 			this.current_instruction.ccc,
 			(multiplicand_length + multiplier_length)) ;
+
+this.set_conditional (product) ;
+
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 
 } // multiply_operation //
 
@@ -1165,7 +1523,60 @@ this.integer_to_bcd (multiplier,
 B500Processor.prototype.nop_operation = function ()
 {
 
+this.current_instruction.microseconds += 10 ;
+
 } // nop_operation //
+
+//------------------------------------------------------------------------------
+// print_operation
+//------------------------------------------------------------------------------
+B500Processor.prototype.print_operation = function ()
+{
+//var not_ready_idx = this.address_to_index (this.current_instruction.aaa) ;
+//var eof_idx = this.address_to_index (this.current_instruction.bbb) ;
+//var input_idx = this.address_to_index (this.current_instruction.ccc) ;
+
+
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+
+} // print_operation //
+
+//------------------------------------------------------------------------------
+// spo_print_operation
+//------------------------------------------------------------------------------
+B500Processor.prototype.spo_print_operation = function ()
+{
+var output_idx = this.address_to_index (this.current_instruction.aaa) ;
+var text_out = '' ;
+var mess = {'action':'spo'} ;
+
+while (text_out.length <= 80)
+	{
+	if (this.memory[output_idx] == 0x1f)
+		{
+		break ;
+		}
+	text_out += this.bcd [this.memory [output_idx]].toString () ;
+	output_idx++
+	}
+
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+
+} // spo_print_operation //
+
+//------------------------------------------------------------------------------
+// spo_read_operation
+//------------------------------------------------------------------------------
+B500Processor.prototype.spo_read_operation = function ()
+{
+//var not_ready_idx = this.address_to_index (this.current_instruction.aaa) ;
+//var eof_idx = this.address_to_index (this.current_instruction.bbb) ;
+//var input_idx = this.address_to_index (this.current_instruction.ccc) ;
+
+
+//this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+
+} // spo_read_operation //
 
 //------------------------------------------------------------------------------
 // subtract_operation
@@ -1176,6 +1587,7 @@ var minuend_length = this.current_instruction.m & 0x0f ;
 var subtrahend_length = this.current_instruction.n & 0x0f ;
 var minuend ;
 var subtrahend ;
+var difference ;
 
 if (minuend_length <= 0)
     {
@@ -1190,16 +1602,15 @@ if (subtrahend_length <= 0)
 subtrahend = this.bcd_to_integer (this.current_instruction.bbb,
 				subtrahend_length) ;
 
-self.postMessage ({'action':'alert',
-'alert':
-minuend.toString () + ':' + minuend_length.toString ()
-+ ' ' + subtrahend.toString () + ':' + subtrahend_length.toString ()
-}) ;
-subtrahend -= minuend ;
+difference = minuend - subtrahend ;
 
-this.integer_to_bcd (subtrahend,
+this.integer_to_bcd (difference ,
 			this.current_instruction.ccc,
 			Math.max (minuend_length, subtrahend_length)) ;
+
+this.set_conditional (difference) ;
+
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 
 } // subtract_operation //
 
@@ -1210,22 +1621,30 @@ B500Processor.prototype.transfer_operation = function ()
 {
 var fields = this.current_instruction.m & 0x0f ;
 var chars = this.current_instruction.n & 0x0f ;
-
+var length ;
 // validate m/n
 
-if (fields == 0)
+length = (fields * 12) + chars ;
+if (length == 0)
     {
-    fields = 11 ;
-    chars = 0 ;
+    length = 120 ;
     }
 
 this.transfer_characters
     (
     this.current_instruction.aaa ,
     this.current_instruction.ccc ,
-    (fields * 12) + chars ,
+    length ,
     0x3f
     ) ;
+
+if (this.current_instruction.n & 0x20)	// N var B bit
+    {
+    this.instruction_idx_next
+        = this.address_to_index (this.current_instruction.bbb) ;
+    }
+
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 
 } // transfer_operation //
 
@@ -1253,6 +1672,14 @@ this.transfer_characters
     0x30
     ) ;
 
+if (this.current_instruction.n & 0x20)	// N var B bit
+    {
+    this.instruction_idx_next
+        = this.address_to_index (this.current_instruction.bbb) ;
+    }
+
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+
 } // transfer_zone_operation //
 
 //------------------------------------------------------------------------------
@@ -1261,8 +1688,52 @@ this.transfer_characters
 B500Processor.prototype.invalid_operation = function ()
 {
 
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+
 } // invalid_operation //
 
+//------------------------------------------------------------------------------
+// mem_dump_message
+//------------------------------------------------------------------------------
+B500Processor.prototype.mem_dump_message = function
+    (
+    addr ,
+    len
+    )
+{
+var mess = {'action':'memdump'} ;
+var text = '' ;
+var idx ;
+var mem_idx = this.address_to_index (addr) ;
+
+for (idx = 0 ; idx < addr.length ; idx++)
+    {
+    text += this.bcd [addr [idx]].ascii ;
+    }
+text += ':' ;
+
+for (idx = 0 ; idx < len ; idx++)
+    {
+    text += this.bcd [this.memory [mem_idx + idx]].ascii ;
+    }
+
+mess.text = text ;
+if (DEBUG)
+    {
+    self.postMessage (mess) ;
+    }
+
+} // mem_dump_message //
+
+//------------------------------------------------------------------------------
+// inst_dump_message
+//------------------------------------------------------------------------------
+B500Processor.prototype.inst_dump_message = function ()
+{
+
+this.mem_dump_message (this.current_instruction.address, 12) ;
+
+} // inst_dump_message //
 
 //##############################################################################
 

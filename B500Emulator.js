@@ -94,6 +94,9 @@ switch (data.action)
     case 'alert':
 	alert ('listener alert:' + data.alert) ;
 	break ;
+    case 'memdump':
+	alert (data.text) ;
+	break ;
     default:
       	alert ('Unknown command' + data.action);
     }
