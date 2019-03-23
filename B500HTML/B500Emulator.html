@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+
+<title>B500 Emulator</title>
+
+<link rel="stylesheet" type="text/css" href="B500Emulator.css">
+
+<script type="text/javascript" src="jquery-3.3.1.min.js"></script>
+<!--
+<script type="text/javascript" src="B500Processor.js"></script>
+-->
+<script type="text/javascript" src="B500Emulator.js"></script>
+
+</head>
+
+<body>
+
+<div id=curt"></div>
+
+<table class="panel_table">
+
+<tr>
+<td
+  id="power_on_light"
+  class="light_green_off_td ind_light_td"
+><div class="ind_switch">POWER<br />ON</div></td>
+<td class="light_red_off_td"><div class="ind_light">CONSOLE<br />PRINTER</div></td>
+<td
+  id="sense_switch_6_light"
+  onclick="worker.postMessage ({'action':'button_pressed','button':'sense_switch_6'}) ;"
+  class="light_red_off_td"
+><div class="ind_switch">SENSE<br />SWITCH<br />6</div></td>
+<td colspan="5" rowspan="5">
+
+<div class="bit_panel_div">
+<table class="bit_panel_table"><!-- ######################################## BIT PANEL -->
+
+<tr>
+<td colspan="4"></td>
+<td rowspan="8" style="font-size: 0 ; width: 1 ; background-color: white ; border: 0 ; border-spacing: 0 ; padding: 0 ;">
+<td class="bit_label_td">P</td>
+<td class="bit_td">
+<div id="mem_disp_bit_p" class="bit_switch_off"></div>
+</td>
+<td rowspan="8" style="font-size: 0 ; width: 1 ; background-color: white ; border: 0 ; border-spacing: 0 ; padding: 0 ;">
+<td colspan="4"></td>
+<td rowspan="8" style="font-size: 0 ; width: 1 ; background-color: white ; border: 0 ; border-spacing: 0 ; padding: 0 ;">
+<td colspan="3"></td>
+</tr>
+
+<tr>
+<td class="bit_label_td">B</td>
+<td class="bit_td">
+<div id="inst_o_bit_b" class="bit_switch_off"></div>
+</td>
+<td colspan="2"></td>
+<td class="bit_label_td">B</td>
+<td class="bit_td">
+<div id="mem_disp_bit_b" class="bit_switch_off"></div>
+</td>
+<td class="bit_label_td">B</td>
+<td class="bit_td">
+<div id="mem_section_bit_b" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="mem_field_bit_b" class="bit_switch_off"></div>
+</td>
+<td></td>
+<td class="bit_label_td">B</td>
+<td class="bit_td">
+<div id="inst_section_bit_b" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="inst_field_bit_b" class="bit_switch_off"></div>
+</td>
+</tr>
+
+<tr>
+<td class="bit_label_td">A</td>
+<td class="bit_td">
+<div id="inst_o_bit_a" class="bit_switch_off"></div>
+</td>
+<td colspan="2"></td>
+<td class="bit_label_td">A</td>
+<td class="bit_td">
+<div id="mem_disp_bit_a" class="bit_switch_off"></div>
+</td>
+<td class="bit_label_td">A</td>
+<td class="bit_td">
+<div id="mem_section_bit_a" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="mem_field_bit_a" class="bit_switch_off"></div>
+</td>
+<td></td>
+<td class="bit_label_td">A</td>
+<td class="bit_td">
+<div id="inst_section_bit_a" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="inst_field_bit_a" class="bit_switch_off"></div>
+</td>
+</tr>
+
+<tr>
+<td class="bit_label_td">8</td>
+<td class="bit_td">
+<div id="inst_o_bit_8" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="inst_m_bit_8" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="inst_n_bit_8" class="bit_switch_off"></div>
+</td>
+<td class="bit_label_td">8</td>
+<td class="bit_td">
+<div id="mem_disp_bit_8" class="bit_switch_off"></div>
+</td>
+<td class="bit_label_td">8</td>
+<td class="bit_td">
+<div id="mem_section_bit_8" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="mem_field_bit_8" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="mem_char_bit_8" class="bit_switch_off"></div>
+</td>
+<td class="bit_label_td">8</td>
+<td class="bit_td">
+<div id="inst_section_bit_8" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="inst_field_bit_8" class="bit_switch_off"></div>
+</td>
+</tr>
+
+<tr>
+<td class="bit_label_td">4</td>
+<td class="bit_td">
+<div id="inst_o_bit_4" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="inst_m_bit_4" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="inst_n_bit_4" class="bit_switch_off"></div>
+</td>
+<td class="bit_label_td">4</td>
+<td class="bit_td">
+<div id="mem_disp_bit_4" class="bit_switch_off"></div>
+</td>
+<td class="bit_label_td">4</td>
+<td class="bit_td">
+<div id="mem_section_bit_4" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="mem_field_bit_4" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="mem_char_bit_4" class="bit_switch_off"></div>
+</td>
+<td class="bit_label_td">4</td>
+<td class="bit_td">
+<div id="inst_section_bit_4" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="inst_field_bit_4" class="bit_switch_off"></div>
+</td>
+</tr>
+
+<tr>
+<td class="bit_label_td">2</td>
+<td class="bit_td">
+<div id="inst_o_bit_2" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="inst_m_bit_2" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="inst_n_bit_2" class="bit_switch_off"></div>
+</td>
+<td class="bit_label_td">2</td>
+<td class="bit_td">
+<div id="mem_disp_bit_2" class="bit_switch_off"></div>
+</td>
+<td class="bit_label_td">2</td>
+<td class="bit_td">
+<div id="mem_section_bit_2" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="mem_field_bit_2" class="bit_switch_off"></div>
+</td>
+<td class="bit_td"><div id="mem_char_bit_2" class="bit_switch_off"></div></td>
+<td class="bit_label_td">2</td>
+<td class="bit_td">
+<div id="inst_section_bit_2" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="inst_field_bit_2" class="bit_switch_off"></div>
+</td>
+</tr>
+
+<tr>
+<td class="bit_label_td">1</td>
+<td class="bit_td">
+<div id="inst_o_bit_1" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="inst_m_bit_1" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="inst_n_bit_1" class="bit_switch_off"></div>
+</td>
+<td class="bit_label_td">1</td>
+<td class="bit_td">
+<div id="mem_disp_bit_1" class="bit_switch_off"></div>
+</td>
+<td class="bit_label_td">1</td>
+<td class="bit_td">
+<div id="mem_section_bit_1" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="mem_field_bit_1" class="bit_switch_off"></div>
+</td>
+<td class="bit_td">
+<div id="mem_char_bit_1" class="bit_switch_off"></div>
+</td>
+<td class="bit_label_td">1</td>
+<td class="bit_td">
+<div id="inst_section_bit_1" class="bit_switch_off"></div>
+</td>
+<td class="bit_td"><div id="inst_field_bit_1" class="bit_switch_off"></div></td>
+</tr>
+
+<tr>
+<td colspan="4" class="bit_panel_label_td">INSTRUCTION</td>
+<td colspan="2" class="bit_panel_label_td">MEMORY<br />DISPLAY</td>
+<td colspan="4" class="bit_panel_label_td">MEMORY<br />ADDRESS</td>
+<td colspan="3" class="bit_panel_label_td">INSTRUCTION<br />ADDRESS</td>
+</tr>
+
+</table>
+</div> <!-- ##################################### bit panel end -->
+
+
+</td>
+</tr>
+
+<tr>
+<td><div></div></td>
+<td class="light_red_off_td ind_light_td"><div class="ind_light">DISK FILE<br />DATA COM</div></td>
+<td
+  id="sense_switch_5_light"
+  onclick="worker.postMessage ({'action':'button_pressed','button':'sense_switch_5'}) ;"
+  class="light_red_off_td"
+><div class="ind_switch">SENSE<br />SWITCH<br />5</div></td>
+</tr>
+
+<tr>
+<td class="ind_light_black_td"><div class="ind_switch">POWER<br />OFF</div></td>
+<td class="light_red_off_td ind_light_td"><div class="ind_light">TAPE</div></td>
+<td
+  id="sense_switch_4_light"
+  onclick="worker.postMessage ({'action':'button_pressed','button':'sense_switch_4'}) ;"
+  class="light_red_off_td"
+><div class="ind_switch">SENSE<br />SWITCH<br />4</div></td>
+</tr>
+
+<tr>
+<td><div></div></td>
+<td class="light_red_off_td ind_light_td"><div class="ind_light">PRINTER</div></td>
+<td
+  id="sense_switch_3_light"
+  onclick="worker.postMessage ({'action':'button_pressed','button':'sense_switch_3'}) ;"
+  class="light_red_off_td"
+><div class="ind_switch">SENSE<br />SWITCH<br />3</div></td>
+</tr>
+
+<tr>
+<td class="ind_switch_black_td"><div class="ind_switch">LOAD</div></td>
+<td class="light_red_off_td ind_light_td"><div class="ind_light">PUNCH</div></td>
+<td
+  id="sense_switch_2_light"
+  onclick="worker.postMessage ({'action':'button_pressed','button':'sense_switch_2'}) ;"
+  class="light_red_off_td"
+><div class="ind_switch">SENSE<br />SWITCH<br />2</div></td>
+</tr>
+
+<tr>
+<td><div></div></td>
+<td class="light_red_off_td ind_light_td"><div class="ind_light">READER 2<br />SORTER</div></td>
+<td
+  id="sense_switch_1_light"
+  onclick="worker.postMessage ({'action':'button_pressed','button':'sense_switch_1'}) ;"
+  class="light_red_off_td"
+><div class="ind_switch">SENSE<br />SWITCH<br />1</div></td>
+<td class="ind_switch_black_td"><div class="ind_switch">BIT<br />RESET</div></td>
+<td
+  id="single_inst_light"
+  onclick="worker.postMessage ({'action':'button_pressed','button':'single_inst'}) ;"
+  class="ind_switch_black_td"
+><div class="ind_switch">SINGLE<br />INST</div></td>
+<td class="ind_switch_black_td"><div class="ind_switch">READ<br />MEMORY</div></td>
+<td class="ind_switch_black_td">
+<div
+  class="ind_switch"
+  onclick="increase_read_pressed () ;"
+>INCREASE<br />ADDRESS<br />READ MEM</div></td>
+<td class="ind_switch_black_td"><div class="ind_switch">WRITE<br />MEMORY</div></td>
+</tr>
+
+<tr>
+<td><div style="color: white ; ">PULL<br />EMERGENCY<br />OFF</div></td>
+<td class="light_red_off_td ind_light_td"><div class="ind_light">READER 1</div></td>
+<td colspan="5"><div></div></td>
+</tr>
+
+<tr>
+<td><div></div></td>
+<td
+  id="central_processor_light"
+  class="light_red_off_td ind_light_td"
+><div class="ind_light">CENTRAL<br />PROCESSOR</div></td>
+<td><div></div></td>
+<td
+  id="clear_light"
+  class="ind_switch_black_td"
+  onclick="clear_pressed () ;"
+><div class="ind_switch">CLEAR</div></td>
+<td><div></div></td>
+<td
+  id="halt_light"
+  class="light_red_off_td"
+  onclick="halt_pressed () ;"
+>
+<div class="ind_switch">HALT</div>
+</td>
+<td><div></div></td>
+<td
+  id="continue_light"
+  class="light_green_off_td"
+  onclick="continue_pressed () ;"
+>
+<div class="ind_switch">CONTINUE</div>
+</td>
+</tr>
+
+</table>
+
+<script>run_it () ;</script>
+</body>
+</html>

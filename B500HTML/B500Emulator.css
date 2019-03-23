@@ -1,0 +1,114 @@
+/*
+
+
+*/
+
+*
+  {
+  font-family: Arial,Helvetica,sans-serif ;
+  font-size: 1.1vw ;
+  background-color: #262626 ;
+  }
+.panel_table
+  {
+  border-spacing: 2.0vh 1.0vw ;
+  }
+
+.light_red_on_td ,
+.light_red_off_td ,
+.light_black_off_td ,
+.light_green_on_td ,
+.light_green_off_td ,
+.ind_light_black_td ,
+.ind_switch_black_td
+  {
+  width: 9.0vw ;
+  height: 7vh ;
+  color: white ;
+  border: 3px solid silver ;
+  }
+.light_red_on_td
+  {
+  background-color: red ;
+  }
+.light_red_off_td
+  {
+  background-color: #990000 ;
+  }
+.light_green_on_td
+  {
+  background-color: #00e600 ;
+  }
+.light_green_off_td
+  {
+  background-color: #006600 ;
+  }
+.ind_light_black_td ,
+.ind_switch_black_td
+  {
+  background-color: black ;
+  }
+.ind_switch_red_td ,
+.ind_switch_red_off_td ,
+.ind_switch_green_td ,
+.ind_switch_green_off_td ,
+.ind_switch_black_td
+  {
+  cursor: pointer ;
+  }
+
+.ind_light ,
+.ind_switch
+  {
+  text-align: center ;
+  vertical-align: middle ;
+  background-color: transparent ;
+  }
+
+.bit_panel_div
+  {
+  height: 45.0vh ;
+  width: 55.0vw ;
+  }
+.bit_panel_table
+  {
+  height: 100% ;
+  width: 100% ;
+  border: 2px solid white ;
+  }
+
+.bit_panel_label_td
+  {
+  text-align: center ;
+  vertical-align: middle ;
+  color: white ;
+  }
+.bit_label_td
+  {
+  width: 7.6% ;
+  color: white ;
+  text-align: center ;
+  vertical-align: middle ;
+  }
+.bit_td
+  {
+  width: 7.6% ;
+  text-align: center ;
+  vertical-align: middle ;
+  }
+.bit_switch_on ,
+.bit_switch_off
+  {
+  margin: auto ;
+  height: 3.0vh ;
+  width: 3.0vh ;
+  border-radius: 50% ;
+  }
+.bit_switch_on
+  {
+  background-color: white ;
+  }
+.bit_switch_off
+  {
+  background-color: grey ;
+  }
