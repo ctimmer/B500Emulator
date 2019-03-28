@@ -61,8 +61,8 @@ function B500Processor ()
 {
 this.test_program
     = "61 130      250J0000J3J0000ABCDEFGHIJtWXYZ            SIZE >"
-    + " 12                                                         "
-    + "                                                705010   01@"
+    + "ABCDEFGHIJKLMNOPQRSTUVWXYZt                                 "
+    + "00000012340x*,***,***,***.00-       800100110050Q1 050      "
     + "J  100010   705010   01561 180      705010   01561 200      "
     + "705010   01561 220      705010   01561 240      705010   015"
     + "61 260      705010   01561 280      705010   01561 300      "
@@ -510,6 +510,7 @@ this.bcd [0x21].op_function = this.address_modify_operation.bind (this) ; // "J"
 this.bcd [0x24].op_function = this.data_compress_operation.bind (this) ; // "M"
 this.bcd [0x25].op_function = this.data_expand_operation.bind (this) ; // "N"
 this.bcd [0x27].op_function = this.transfer_zone_operation.bind (this) ; // "P"
+this.bcd [0x28].op_function = this.spo_operation.bind (this) ; 		// "Q"
 this.bcd [0x30].op_function = this.nop_operation.bind (this) ;		// " "
 this.bcd [0x33].op_function = this.interrogate_operation.bind (this) ; // "T"
 
@@ -1461,23 +1462,148 @@ this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 } // interrogate_operation //
 
 //------------------------------------------------------------------------------
-// mask_operation
+// fiscal_mask
 //------------------------------------------------------------------------------
-B500Processor.prototype.mask_operation = function ()
+B500Processor.prototype.fiscal_mask = function
+    (
+    b_comma ,
+    b_decimal
+    )
 {
 var from_idx = this.address_to_index (this.current_instruction.aaa) ;
+var from_end_idx ;
 var mask_idx = this.address_to_index (this.current_instruction.bbb) ;
 var to_idx = this.address_to_index (this.current_instruction.ccc) ;
 var from_length = this.current_instruction.m & 0x0f ;
+var b_blank = this.ascii_to_bcd [' '] ;
+var b_dollar = this.ascii_to_bcd ['$'] ;
+var mask_char = ' ' ;
+var insert_all = false ;
 
 if (from_length == 0)
 	{
 	from_length = 12 ;
 	}
+from_end_idx = from_idx + from_length ;
+//this.mem_dump_message (this.current_instruction.aaa, from_length) ;
+//this.mem_dump_message (this.current_instruction.bbb, 20) ;
+
+while (from_idx < from_end_idx)
+    {
+    if ((this.memory [from_idx] & 0x0f) != 0x00)
+	{
+	insert_all = true ;
+	}
+    else if (this.memory [mask_idx] == b_decimal)
+	{
+	insert_all = true ;
+	}
+    else if (this.memory [mask_idx] == b_dollar)
+	{
+	//insert_all = true ;
+	this.memory [to_idx] = this.memory [mask_idx] ;
+    	to_idx++ ;
+        mask_idx++ ;
+	}
+    if (insert_all)
+	{
+	if (this.memory [mask_idx] == b_comma
+	    || this.memory [mask_idx] == b_decimal)
+	    {
+	    this.memory [to_idx] = this.memory [mask_idx] ;
+	    }
+	else
+	    {
+	    this.memory [to_idx] = this.memory [from_idx] & 0x0f ;
+            from_idx++ ;
+	    }
+	}
+    else
+	{
+	if (this.memory [mask_idx] == b_comma
+	    || this.memory [mask_idx] == b_decimal)
+	    {
+	    this.memory [to_idx] = mask_char ;
+	    }
+	else
+	    {
+	    this.memory [to_idx] = this.memory [mask_idx] ;
+	    mask_char = this.memory [mask_idx] ;
+            from_idx++ ;
+	    }
+	}
+    to_idx++ ;
+    mask_idx++ ;
+//this.mem_dump_message (this.current_instruction.ccc, 26) ;
+    }
+
+from_idx-- ;					// test sign
+if (this.memory [from_idx] && 0x20)
+    {						// negative
+    this.memory [to_idx] = this.memory [mask_idx] ;
+    }
+else
+    {						// non-negative
+    this.memory [to_idx] = b_blank ;
+    }
+//this.mem_dump_message (this.current_instruction.ccc, 26) ;
 
 this.set_conditional (0) ;
 
 this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+
+} // fiscal_mask //
+
+//------------------------------------------------------------------------------
+// alphanumeric_mask
+//------------------------------------------------------------------------------
+B500Processor.prototype.alphanumeric_mask = function ()
+{
+var from_idx = this.address_to_index (this.current_instruction.aaa) ;
+var from_end_idx ;
+var mask_idx = this.address_to_index (this.current_instruction.bbb) ;
+var to_idx = this.address_to_index (this.current_instruction.ccc) ;
+var from_length = this.current_instruction.m & 0x0f ;
+var b_blank = this.ascii_to_bcd [' '] ;
+var mask_char = ' ' ;
+
+if (from_length == 0)
+	{
+	from_length = 12 ;
+	}
+from_end_idx = from_idx + from_length ;
+this.mem_dump_message (this.current_instruction.aaa, from_length) ;
+
+//################### NEED
+	
+this.mem_dump_message (this.current_instruction.ccc, 26) ;
+
+this.set_conditional (0) ;
+
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+
+} // alphanumeric_mask //
+
+//------------------------------------------------------------------------------
+// mask_operation
+//------------------------------------------------------------------------------
+B500Processor.prototype.mask_operation = function ()
+{
+var b_comma = this.ascii_to_bcd [','] ;
+var b_decimal = this.ascii_to_bcd ['.'] ;
+
+switch (this.current_instruction.n & 0x0f)
+    {
+    case 0 :					// fiscal standard
+	this.fiscal_mask (b_comma, b_decimal) ;
+        break ;
+    case 1 :					// fiscal inverted
+	this.fiscal_mask (b_decimal, b_comma) ;
+        break ;
+    default :					// alphanumeric
+	this.alphanumeric_mask (b_decimal, b_comma) ;	// NEED
+        break ;
+    }
 
 } // mask_operation //
 
@@ -1542,13 +1668,14 @@ this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 } // print_operation //
 
 //------------------------------------------------------------------------------
-// spo_print_operation
+// spo_print
 //------------------------------------------------------------------------------
-B500Processor.prototype.spo_print_operation = function ()
+B500Processor.prototype.spo_print = function ()
 {
 var output_idx = this.address_to_index (this.current_instruction.aaa) ;
 var text_out = '' ;
 var mess = {'action':'spo'} ;
+//this.inst_dump_message () ;
 
 while (text_out.length <= 80)
 	{
@@ -1560,23 +1687,44 @@ while (text_out.length <= 80)
 	output_idx++
 	}
 
+//this.mem_dump_message (this.current_instruction.aaa, 26) ;
 this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 
-} // spo_print_operation //
+} // spo_print //
 
 //------------------------------------------------------------------------------
-// spo_read_operation
+// spo_read
 //------------------------------------------------------------------------------
-B500Processor.prototype.spo_read_operation = function ()
+B500Processor.prototype.spo_read = function ()
 {
-//var not_ready_idx = this.address_to_index (this.current_instruction.aaa) ;
-//var eof_idx = this.address_to_index (this.current_instruction.bbb) ;
-//var input_idx = this.address_to_index (this.current_instruction.ccc) ;
+var input_branch_idx = this.address_to_index (this.current_instruction.bbb) ;
+var output_idx = this.address_to_index (this.current_instruction.ccc) ;
 
 
 //this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 
-} // spo_read_operation //
+} // spo_read //
+
+//------------------------------------------------------------------------------
+// spo_operation
+//------------------------------------------------------------------------------
+B500Processor.prototype.spo_operation = function ()
+{
+
+switch (this.current_instruction.m & 0x0f)
+    {
+    case 1 :					// spo print
+	this.spo_print () ;
+        break ;
+    case 2 :					// spo read
+	this.spo_read () ;
+        break ;
+    default :					// fault
+this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+        break ;
+    }
+
+} // spo_operation //
 
 //------------------------------------------------------------------------------
 // subtract_operation
