@@ -62,7 +62,7 @@ function B500Processor ()
 this.test_program
     = "61 130      250J0000J3J0000ABCDEFGHIJtWXYZ            SIZE >"
     + "ABCDEFGHIJKLMNOPQRSTUVWXYZt                                 "
-    + "00000012340x*,***,***,***.00-       800100110050Q1 050      "
+    + "123456789012&&&&-&&&-&&&&&         #802100110050Q1 050      "
     + "J  100010   705010   01561 180      705010   01561 200      "
     + "705010   01561 220      705010   01561 240      705010   015"
     + "61 260      705010   01561 280      705010   01561 300      "
@@ -1473,22 +1473,33 @@ B500Processor.prototype.fiscal_mask = function
 var from_idx = this.address_to_index (this.current_instruction.aaa) ;
 var from_end_idx ;
 var mask_idx = this.address_to_index (this.current_instruction.bbb) ;
+var mask_end_idx ;
 var to_idx = this.address_to_index (this.current_instruction.ccc) ;
+var to_end_idx ;
 var from_length = this.current_instruction.m & 0x0f ;
 var b_blank = this.ascii_to_bcd [' '] ;
 var b_dollar = this.ascii_to_bcd ['$'] ;
 var mask_char = ' ' ;
 var insert_all = false ;
 
+if (from_length > 11)
+    {
+    return ;			    // fault
+    }
+
 if (from_length == 0)
-	{
-	from_length = 12 ;
-	}
+    {
+    from_length = 12 ;
+    }
 from_end_idx = from_idx + from_length ;
+mask_end_idx = mask_idx + 24 ;		// max length
+to_end_idx = to_idx + 24 ;
 //this.mem_dump_message (this.current_instruction.aaa, from_length) ;
 //this.mem_dump_message (this.current_instruction.bbb, 20) ;
 
-while (from_idx < from_end_idx)
+while (from_idx < from_end_idx
+	&& mask_idx < mask_end_idx
+	&& to_idx < to_end_idx)
     {
     if ((this.memory [from_idx] & 0x0f) != 0x00)
 	{
@@ -1537,14 +1548,18 @@ while (from_idx < from_end_idx)
 //this.mem_dump_message (this.current_instruction.ccc, 26) ;
     }
 
-from_idx-- ;					// test sign
-if (this.memory [from_idx] && 0x20)
-    {						// negative
-    this.memory [to_idx] = this.memory [mask_idx] ;
-    }
-else
-    {						// non-negative
-    this.memory [to_idx] = b_blank ;
+if (mask_idx < mask_end_idx
+	&& to_idx < to_end_idx)
+    {
+    from_idx-- ;					// test sign
+    if (this.memory [from_idx] && 0x20)
+        {						// negative
+        this.memory [to_idx] = this.memory [mask_idx] ;
+        }
+    else
+        {						// non-negative
+        this.memory [to_idx] = b_blank ;
+        }
     }
 //this.mem_dump_message (this.current_instruction.ccc, 26) ;
 
@@ -1563,20 +1578,38 @@ var from_idx = this.address_to_index (this.current_instruction.aaa) ;
 var from_end_idx ;
 var mask_idx = this.address_to_index (this.current_instruction.bbb) ;
 var to_idx = this.address_to_index (this.current_instruction.ccc) ;
+var to_end_idx ;
 var from_length = this.current_instruction.m & 0x0f ;
-var b_blank = this.ascii_to_bcd [' '] ;
-var mask_char = ' ' ;
+var b_amp = this.ascii_to_bcd ['&'] ;
+
+if (from_length > 11)
+    {
+    return ;			    // fault
+    }
 
 if (from_length == 0)
-	{
-	from_length = 12 ;
-	}
+    {
+    from_length = 12 ;
+    }
 from_end_idx = from_idx + from_length ;
-this.mem_dump_message (this.current_instruction.aaa, from_length) ;
+to_end_idx = to_idx + 24 ;
 
-//################### NEED
-	
-this.mem_dump_message (this.current_instruction.ccc, 26) ;
+while (from_idx < from_end_idx
+	&& to_idx < to_end_idx)
+    {
+    if (this.memory [mask_idx] == b_amp)
+	{			    // insert source character
+	this.memory [to_idx] = this.memory [from_idx] ;
+	from_idx++ ;
+	}
+    else
+	{			    // insert mask character
+	this.memory [to_idx] = this.memory [mask_idx] ;
+	}
+    to_idx++ ;
+    mask_idx++ ;
+//this.mem_dump_message (this.current_instruction.ccc, 26) ;
+    }
 
 this.set_conditional (0) ;
 
@@ -1601,7 +1634,7 @@ switch (this.current_instruction.n & 0x0f)
 	this.fiscal_mask (b_decimal, b_comma) ;
         break ;
     default :					// alphanumeric
-	this.alphanumeric_mask (b_decimal, b_comma) ;	// NEED
+	this.alphanumeric_mask (b_decimal, b_comma) ;
         break ;
     }
 
