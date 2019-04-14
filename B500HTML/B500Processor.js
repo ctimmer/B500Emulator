@@ -23,7 +23,7 @@
 ** TRANSFER ZONE
 ** DATA COMPRESS - untested
 ** DATA EXPAND - untested
-** MASK - incomplete
+** MASK - mostly complete
 **
 **   Card input/output instructions (yes)
 **   Print output instructions (yes)
@@ -31,11 +31,15 @@
 **   Magnetic Tape instructions (yes)
 **   Paper Tape instructions (? same as mag tape, almost)
 **   Disk File instructions (yes)
+** DISK FILE WRITE
+** DISK FILE READ
 **   Data Communication instructions (maybe)
 **
 **------------------------------------------------------------------------------
 **
 */
+
+importScripts ('./B500Disk.js') ;
 
 "use strict"
 
@@ -48,11 +52,20 @@ const GROUP_MARK = 't' ;
 const instruction_length = 12 ;
 const section_length = 120 ;
 const field_length = 12 ;
+const BCD_CHAR = 0x3f ;
+const BCD_ZONE = 0x30 ;
+const BCD_NUMERIC = 0x0f ;
 const CONDITION_OFF = 0x00 ;
 const CONDITION_EQUAL = 0x01 ;
 const CONDITION_LOW = 0x02 ;
 const CONDITION_HIGH = 0x04 ;
+const CONDITION_UNEQUAL = (CONDITION_LOW | CONDITION_HIGH) ;
 const DEFAULT_INSTRUCTION_MICROSECONDS = 100 ;
+
+const DISK_NOT_READY = "notready" ;
+const DISK_BAD_SEGMENT = "badsegment" ;
+const DISK_BAD_ADDRESS = "notready" ;
+
 
 //------------------------------------------------------------------------------
 // B500Processor
@@ -60,314 +73,70 @@ const DEFAULT_INSTRUCTION_MICROSECONDS = 100 ;
 function B500Processor ()
 {
 this.test_program
-    = "61 130      250J0000J3J0000ABCDEFGHIJtWXYZ            SIZE >"
-    + "ABCDEFGHIJKLMNOPQRSTUVWXYZt                                 "
-    + "123456789012&&&&-&&&-&&&&&         #802100110050Q1 050      "
-    + "J  100010   705010   01561 180      705010   01561 200      "
-    + "705010   01561 220      705010   01561 240      705010   015"
-    + "61 260      705010   01561 280      705010   01561 300      "
-    + "705010   01561 320      705010   01561 340      705010   015"
-    + "61 360      705010   01561 380      705010   01561 400      "
-    + "705010   01561 420      705010   01561 440      705010   015"
-    + "61 460      705010   01561 480      705010   01561 500      "
-    + "705010   01561 520      705010   01561 540      705010   015"
-    + "61 560      705010   01561 580      705010   01561 600      "
-    + "705010   01561 620      705010   01561 640      705010   015"
-    + "61 660      705010   01561 680      705010   01561 700      "
-    + "705010   01561 720      705010   01561 740      705010   015"
-    + "61 760      705010   01561 780      705010   01561 800      "
-    + "705010   01561 820      705010   01561 840      705010   015"
-    + "61 860      705010   01561 880      705010   01561 900      "
-    + "705010   01561 920      705010   01561 940      705010   015"
-    + "61 960      705010   01561 980      705010   01561 +00      "
-    + "705010   01561 +20      705010   01561 +40      705010   015"
-    + "61 +60      705010   01561 +80      705010   01561 A00      "
-    + "705010   01561 A20      705010   01561 A40      705010   015"
-    + "61 A60      705010   01561 A80      705010   01561 B00      "
-    + "705010   01561 B20      705010   01561 B40      705010   015"
-    + "61 B60      705010   01561 B80      705010   01561 C00      "
-    + "705010   01561 C20      705010   01561 C40      705010   015"
-    + "61 C60      705010   01561 C80      705010   01561 D00      "
-    + "705010   01561 D20      705010   01561 D40      705010   015"
-    + "61 D60      705010   01561 D80      705010   01561 E00      "
-    + "705010   01561 E20      705010   01561 E40      705010   015"
-    + "61 E60      705010   01561 E80      705010   01561 F00      "
-    + "705010   01561 F20      705010   01561 F40      705010   015"
-    + "61 F60      705010   01561 F80      705010   01561 G00      "
-    + "705010   01561 G20      705010   01561 G40      705010   015"
-    + "61 G60      705010   01561 G80      705010   01561 H00      "
-    + "705010   01561 H20      705010   01561 H40      705010   015"
-    + "61 H60      705010   01561 H80      705010   01561 I00      "
-    + "705010   01561 I20      705010   01561 I40      705010   015"
-    + "61 I60      705010   01561 I80      705010   01561 x00      "
-    + "705010   01561 x20      705010   01561 x40      705010   015"
-    + "61 x60      705010   01561 x80      705010   01561 J00      "
-    + "705010   01561 J20      705010   01561 J40      705010   015"
-    + "61 J60      705010   01561 J80      705010   01561 K00      "
-    + "705010   01561 K20      705010   01561 K40      705010   015"
-    + "61 K60      705010   01561 K80      705010   01561 L00      "
-    + "705010   01561 L20      705010   01561 L40      705010   015"
-    + "61 L60      705010   01561 L80      705010   01561 M00      "
-    + "705010   01561 M20      705010   01561 M40      705010   015"
-    + "61 M60      705010   01561 M80      705010   01561 N00      "
-    + "705010   01561 N20      705010   01561 N40      705010   015"
-    + "61 N60      705010   01561 N80      705010   01561 O00      "
-    + "705010   01561 O20      705010   01561 O40      705010   015"
-    + "61 O60      705010   01561 O80      705010   01561 P00      "
-    + "705010   01561 P20      705010   01561 P40      705010   015"
-    + "61 P60      705010   01561 P80      705010   01561 Q00      "
-    + "705010   01561 Q20      705010   01561 Q40      705010   015"
-    + "61 Q60      705010   01561 Q80      705010   01561 R00      "
-    + "705010   01561 R20      705010   01561 R40      705010   015"
-    + "61 R60      705010   01561 R80      705010   01561  00      "
-    + "705010   01561  20      705010   01561  40      705010   015"
-    + "61  60      705010   01561  80      705010   01561 /00      "
-    + "705010   01561 /20      705010   01561 /40      705010   015"
-    + "61 /60      705010   01561 /80      705010   01561 S00      "
-    + "705010   01561 S20      705010   01561 S40      705010   015"
-    + "61 S60      705010   01561 S80      705010   01561 T00      "
-    + "705010   01561 T20      705010   01561 T40      705010   015"
-    + "61 T60      705010   01561 T80      705010   01561 U00      "
-    + "705010   01561 U20      705010   01561 U40      705010   015"
-    + "61 U60      705010   01561 U80      705010   01561 V00      "
-    + "705010   01561 V20      705010   01561 V40      705010   015"
-    + "61 V60      705010   01561 V80      705010   01561 W00      "
-    + "705010   01561 W20      705010   01561 W40      705010   015"
-    + "61 W60      705010   01561 W80      705010   01561 X00      "
-    + "705010   01561 X20      705010   01561 X40      705010   015"
-    + "61 X60      705010   01561 X80      705010   01561 Y00      "
-    + "705010   01561 Y20      705010   01561 Y40      705010   015"
-    + "61 Y60      705010   01561 Y80      705010   01561 Z00      "
-    + "705010   01561 Z20      705010   01561 Z40      705010   015"
-    + "61 Z60      705010   01561 Z80      705010   01561 0x0      "
-    + "705010   01561 0K0      705010   01561 0M0      705010   015"
-    + "61 0O0      705010   01561 0Q0      705010   01561 1x0      "
-    + "705010   01561 1K0      705010   01561 1M0      705010   015"
-    + "61 1O0      705010   01561 1Q0      705010   01561 2x0      "
-    + "705010   01561 2K0      705010   01561 2M0      705010   015"
-    + "61 2O0      705010   01561 2Q0      705010   01561 3x0      "
-    + "705010   01561 3K0      705010   01561 3M0      705010   015"
-    + "61 3O0      705010   01561 3Q0      705010   01561 4x0      "
-    + "705010   01561 4K0      705010   01561 4M0      705010   015"
-    + "61 4O0      705010   01561 4Q0      705010   01561 5x0      "
-    + "705010   01561 5K0      705010   01561 5M0      705010   015"
-    + "61 5O0      705010   01561 5Q0      705010   01561 6x0      "
-    + "705010   01561 6K0      705010   01561 6M0      705010   015"
-    + "61 6O0      705010   01561 6Q0      705010   01561 7x0      "
-    + "705010   01561 7K0      705010   01561 7M0      705010   015"
-    + "61 7O0      705010   01561 7Q0      705010   01561 8x0      "
-    + "705010   01561 8K0      705010   01561 8M0      705010   015"
-    + "61 8O0      705010   01561 8Q0      705010   01561 9x0      "
-    + "705010   01561 9K0      705010   01561 9M0      705010   015"
-    + "61 9O0      705010   01561 9Q0      705010   01561 +x0      "
-    + "705010   01561 +K0      705010   01561 +M0      705010   015"
-    + "61 +O0      705010   01561 +Q0      705010   01561 Ax0      "
-    + "705010   01561 AK0      705010   01561 AM0      705010   015"
-    + "61 AO0      705010   01561 AQ0      705010   01561 Bx0      "
-    + "705010   01561 BK0      705010   01561 BM0      705010   015"
-    + "61 BO0      705010   01561 BQ0      705010   01561 Cx0      "
-    + "705010   01561 CK0      705010   01561 CM0      705010   015"
-    + "61 CO0      705010   01561 CQ0      705010   01561 Dx0      "
-    + "705010   01561 DK0      705010   01561 DM0      705010   015"
-    + "61 DO0      705010   01561 DQ0      705010   01561 Ex0      "
-    + "705010   01561 EK0      705010   01561 EM0      705010   015"
-    + "61 EO0      705010   01561 EQ0      705010   01561 Fx0      "
-    + "705010   01561 FK0      705010   01561 FM0      705010   015"
-    + "61 FO0      705010   01561 FQ0      705010   01561 Gx0      "
-    + "705010   01561 GK0      705010   01561 GM0      705010   015"
-    + "61 GO0      705010   01561 GQ0      705010   01561 Hx0      "
-    + "705010   01561 HK0      705010   01561 HM0      705010   015"
-    + "61 HO0      705010   01561 HQ0      705010   01561 Ix0      "
-    + "705010   01561 IK0      705010   01561 IM0      705010   015"
-    + "61 IO0      705010   01561 IQ0      705010   01561 xx0      "
-    + "705010   01561 xK0      705010   01561 xM0      705010   015"
-    + "61 xO0      705010   01561 xQ0      705010   01561 Jx0      "
-    + "705010   01561 JK0      705010   01561 JM0      705010   015"
-    + "61 JO0      705010   01561 JQ0      705010   01561 Kx0      "
-    + "705010   01561 KK0      705010   01561 KM0      705010   015"
-    + "61 KO0      705010   01561 KQ0      705010   01561 Lx0      "
-    + "705010   01561 LK0      705010   01561 LM0      705010   015"
-    + "61 LO0      705010   01561 LQ0      705010   01561 Mx0      "
-    + "705010   01561 MK0      705010   01561 MM0      705010   015"
-    + "61 MO0      705010   01561 MQ0      705010   01561 Nx0      "
-    + "705010   01561 NK0      705010   01561 NM0      705010   015"
-    + "61 NO0      705010   01561 NQ0      705010   01561 Ox0      "
-    + "705010   01561 OK0      705010   01561 OM0      705010   015"
-    + "61 OO0      705010   01561 OQ0      705010   01561 Px0      "
-    + "705010   01561 PK0      705010   01561 PM0      705010   015"
-    + "61 PO0      705010   01561 PQ0      705010   01561 Qx0      "
-    + "705010   01561 QK0      705010   01561 QM0      705010   015"
-    + "61 QO0      705010   01561 QQ0      705010   01561 Rx0      "
-    + "705010   01561 RK0      705010   01561 RM0      705010   015"
-    + "61 RO0      705010   01561 RQ0      705010   01561  x0      "
-    + "705010   01561  K0      705010   01561  M0      705010   015"
-    + "61  O0      705010   01561  Q0      705010   01561 /x0      "
-    + "705010   01561 /K0      705010   01561 /M0      705010   015"
-    + "61 /O0      705010   01561 /Q0      705010   01561 Sx0      "
-    + "705010   01561 SK0      705010   01561 SM0      705010   015"
-    + "61 SO0      705010   01561 SQ0      705010   01561 Tx0      "
-    + "705010   01561 TK0      705010   01561 TM0      705010   015"
-    + "61 TO0      705010   01561 TQ0      705010   01561 Ux0      "
-    + "705010   01561 UK0      705010   01561 UM0      705010   015"
-    + "61 UO0      705010   01561 UQ0      705010   01561 Vx0      "
-    + "705010   01561 VK0      705010   01561 VM0      705010   015"
-    + "61 VO0      705010   01561 VQ0      705010   01561 Wx0      "
-    + "705010   01561 WK0      705010   01561 WM0      705010   015"
-    + "61 WO0      705010   01561 WQ0      705010   01561 Xx0      "
-    + "705010   01561 XK0      705010   01561 XM0      705010   015"
-    + "61 XO0      705010   01561 XQ0      705010   01561 Yx0      "
-    + "705010   01561 YK0      705010   01561 YM0      705010   015"
-    + "61 YO0      705010   01561 YQ0      705010   01561 Zx0      "
-    + "705010   01561 ZK0      705010   01561 ZM0      705010   015"
-    + "61 ZO0      705010   01561 ZQ0      705010   01561 0+0      "
-    + "705010   01561 0B0      705010   01561 0D0      705010   015"
-    + "61 0F0      705010   01561 0H0      705010   01561 1+0      "
-    + "705010   01561 1B0      705010   01561 1D0      705010   015"
-    + "61 1F0      705010   01561 1H0      705010   01561 2+0      "
-    + "705010   01561 2B0      705010   01561 2D0      705010   015"
-    + "61 2F0      705010   01561 2H0      705010   01561 3+0      "
-    + "705010   01561 3B0      705010   01561 3D0      705010   015"
-    + "61 3F0      705010   01561 3H0      705010   01561 4+0      "
-    + "705010   01561 4B0      705010   01561 4D0      705010   015"
-    + "61 4F0      705010   01561 4H0      705010   01561 5+0      "
-    + "705010   01561 5B0      705010   01561 5D0      705010   015"
-    + "61 5F0      705010   01561 5H0      705010   01561 6+0      "
-    + "705010   01561 6B0      705010   01561 6D0      705010   015"
-    + "61 6F0      705010   01561 6H0      705010   01561 7+0      "
-    + "705010   01561 7B0      705010   01561 7D0      705010   015"
-    + "61 7F0      705010   01561 7H0      705010   01561 8+0      "
-    + "705010   01561 8B0      705010   01561 8D0      705010   015"
-    + "61 8F0      705010   01561 8H0      705010   01561 9+0      "
-    + "705010   01561 9B0      705010   01561 9D0      705010   015"
-    + "61 9F0      705010   01561 9H0      705010   01561 ++0      "
-    + "705010   01561 +B0      705010   01561 +D0      705010   015"
-    + "61 +F0      705010   01561 +H0      705010   01561 A+0      "
-    + "705010   01561 AB0      705010   01561 AD0      705010   015"
-    + "61 AF0      705010   01561 AH0      705010   01561 B+0      "
-    + "705010   01561 BB0      705010   01561 BD0      705010   015"
-    + "61 BF0      705010   01561 BH0      705010   01561 C+0      "
-    + "705010   01561 CB0      705010   01561 CD0      705010   015"
-    + "61 CF0      705010   01561 CH0      705010   01561 D+0      "
-    + "705010   01561 DB0      705010   01561 DD0      705010   015"
-    + "61 DF0      705010   01561 DH0      705010   01561 E+0      "
-    + "705010   01561 EB0      705010   01561 ED0      705010   015"
-    + "61 EF0      705010   01561 EH0      705010   01561 F+0      "
-    + "705010   01561 FB0      705010   01561 FD0      705010   015"
-    + "61 FF0      705010   01561 FH0      705010   01561 G+0      "
-    + "705010   01561 GB0      705010   01561 GD0      705010   015"
-    + "61 GF0      705010   01561 GH0      705010   01561 H+0      "
-    + "705010   01561 HB0      705010   01561 HD0      705010   015"
-    + "61 HF0      705010   01561 HH0      705010   01561 I+0      "
-    + "705010   01561 IB0      705010   01561 ID0      705010   015"
-    + "61 IF0      705010   01561 IH0      705010   01561 x+0      "
-    + "705010   01561 xB0      705010   01561 xD0      705010   015"
-    + "61 xF0      705010   01561 xH0      705010   01561 J+0      "
-    + "705010   01561 JB0      705010   01561 JD0      705010   015"
-    + "61 JF0      705010   01561 JH0      705010   01561 K+0      "
-    + "705010   01561 KB0      705010   01561 KD0      705010   015"
-    + "61 KF0      705010   01561 KH0      705010   01561 L+0      "
-    + "705010   01561 LB0      705010   01561 LD0      705010   015"
-    + "61 LF0      705010   01561 LH0      705010   01561 M+0      "
-    + "705010   01561 MB0      705010   01561 MD0      705010   015"
-    + "61 MF0      705010   01561 MH0      705010   01561 N+0      "
-    + "705010   01561 NB0      705010   01561 ND0      705010   015"
-    + "61 NF0      705010   01561 NH0      705010   01561 O+0      "
-    + "705010   01561 OB0      705010   01561 OD0      705010   015"
-    + "61 OF0      705010   01561 OH0      705010   01561 P+0      "
-    + "705010   01561 PB0      705010   01561 PD0      705010   015"
-    + "61 PF0      705010   01561 PH0      705010   01561 Q+0      "
-    + "705010   01561 QB0      705010   01561 QD0      705010   015"
-    + "61 QF0      705010   01561 QH0      705010   01561 R+0      "
-    + "705010   01561 RB0      705010   01561 RD0      705010   015"
-    + "61 RF0      705010   01561 RH0      705010   01561  +0      "
-    + "705010   01561  B0      705010   01561  D0      705010   015"
-    + "61  F0      705010   01561  H0      705010   01561 /+0      "
-    + "705010   01561 /B0      705010   01561 /D0      705010   015"
-    + "61 /F0      705010   01561 /H0      705010   01561 S+0      "
-    + "705010   01561 SB0      705010   01561 SD0      705010   015"
-    + "61 SF0      705010   01561 SH0      705010   01561 T+0      "
-    + "705010   01561 TB0      705010   01561 TD0      705010   015"
-    + "61 TF0      705010   01561 TH0      705010   01561 U+0      "
-    + "705010   01561 UB0      705010   01561 UD0      705010   015"
-    + "61 UF0      705010   01561 UH0      705010   01561 V+0      "
-    + "705010   01561 VB0      705010   01561 VD0      705010   015"
-    + "61 VF0      705010   01561 VH0      705010   01561 W+0      "
-    + "705010   01561 WB0      705010   01561 WD0      705010   015"
-    + "61 WF0      705010   01561 WH0      705010   01561 X+0      "
-    + "705010   01561 XB0      705010   01561 XD0      705010   015"
-    + "61 XF0      705010   01561 XH0      705010   01561 Y+0      "
-    + "705010   01561 YB0      705010   01561 YD0      705010   015"
-    + "61 YF0      705010   01561 YH0      705010   01561 Z+0      "
-    + "705010   01561 ZB0      705010   01561 ZD0      705010   015"
-    + "61 ZF0      705010   01561 ZH0      705010   01561 0 0      "
-    + "705010   01561 0S0      705010   01561 0U0      705010   015"
-    + "61 0W0      705010   01561 0Y0      705010   01561 1 0      "
-    + "705010   01561 1S0      705010   01561 1U0      705010   015"
-    + "61 1W0      705010   01561 1Y0      705010   01561 2 0      "
-    + "705010   01561 2S0      705010   01561 2U0      705010   015"
-    + "61 2W0      705010   01561 2Y0      705010   01561 3 0      "
-    + "705010   01561 3S0      705010   01561 3U0      705010   015"
-    + "61 3W0      705010   01561 3Y0      705010   01561 4 0      "
-    + "705010   01561 4S0      705010   01561 4U0      705010   015"
-    + "61 4W0      705010   01561 4Y0      705010   01561 5 0      "
-    + "705010   01561 5S0      705010   01561 5U0      705010   015"
-    + "61 5W0      705010   01561 5Y0      705010   01561 6 0      "
-    + "705010   01561 6S0      705010   01561 6U0      705010   015"
-    + "61 6W0      705010   01561 6Y0      705010   01561 7 0      "
-    + "705010   01561 7S0      705010   01561 7U0      705010   015"
-    + "61 7W0      705010   01561 7Y0      705010   01561 8 0      "
-    + "705010   01561 8S0      705010   01561 8U0      705010   015"
-    + "61 8W0      705010   01561 8Y0      705010   01561 9 0      "
-    + "705010   01561 9S0      705010   01561 9U0      705010   015"
-    + "61 9W0      705010   01561 9Y0      705010   01561 + 0      "
-    + "705010   01561 +S0      705010   01561 +U0      705010   015"
-    + "61 +W0      705010   01561 +Y0      705010   01561 A 0      "
-    + "705010   01561 AS0      705010   01561 AU0      705010   015"
-    + "61 AW0      705010   01561 AY0      705010   01561 B 0      "
-    + "705010   01561 BS0      705010   01561 BU0      705010   015"
-    + "61 BW0      705010   01561 BY0      705010   01561 C 0      "
-    + "705010   01561 CS0      705010   01561 CU0      705010   015"
-    + "61 CW0      705010   01561 CY0      705010   01561 D 0      "
-    + "705010   01561 DS0      705010   01561 DU0      705010   015"
-    + "61 DW0      705010   01561 DY0      705010   01561 E 0      "
-    + "705010   01561 ES0      705010   01561 EU0      705010   015"
-    + "61 EW0      705010   01561 EY0      705010   01561 F 0      "
-    + "705010   01561 FS0      705010   01561 FU0      705010   015"
-    + "61 FW0      705010   01561 FY0      705010   01561 G 0      "
-    + "705010   01561 GS0      705010   01561 GU0      705010   015"
-    + "61 GW0      705010   01561 GY0      705010   01561 H 0      "
-    + "705010   01561 HS0      705010   01561 HU0      705010   015"
-    + "61 HW0      705010   01561 HY0      705010   01561 I 0      "
-    + "705010   01561 IS0      705010   01561 IU0      705010   015"
-    + "61 IW0      705010   01561 IY0      705010   01561 x 0      "
-    + "705010   01561 xS0      705010   01561 xU0      705010   015"
-    + "61 xW0      705010   01561 xY0      705010   01561 J 0      "
-    + "705010   01561 JS0      705010   01561 JU0      705010   015"
-    + "61 JW0      705010   01561 JY0      705010   01561 K 0      "
-    + "705010   01561 KS0      705010   01561 KU0      705010   015"
-    + "61 KW0      705010   01561 KY0      705010   01561 L 0      "
-    + "705010   01561 LS0      705010   01561 LU0      705010   015"
-    + "61 LW0      705010   01561 LY0      705010   01561 M 0      "
-    + "705010   01561 MS0      705010   01561 MU0      705010   015"
-    + "61 MW0      705010   01561 MY0      705010   01561 N 0      "
-    + "705010   01561 NS0      705010   01561 NU0      705010   015"
-    + "61 NW0      705010   01561 NY0      705010   01561 O 0      "
-    + "705010   01561 OS0      705010   01561 OU0      705010   015"
-    + "61 OW0      705010   01561 OY0      705010   01561 P 0      "
-    + "705010   01561 PS0      705010   01561 PU0      705010   015"
-    + "61 PW0      705010   01561 PY0      705010   01561 Q 0      "
-    + "705010   01561 QS0      705010   01561 QU0      705010   015"
-    + "61 QW0      705010   01561 QY0      705010   01561 R 0      "
-    + "705010   01561 RS0      705010   01561 RU0      705010   015"
-    + "61 RW0      705010   01561 RY0      705010   01561   0      "
-    + "705010   01561  S0      999130                              "
+    = "61 K50      AAAAAAAAAAAABBBBBBBBBBBBCCCCCCCCCCCCDDDDDDDDDDDD"
+    + "EEEEEEEEEEEEFFFFFFFFFFFFGGGGGGGGGGGGHHHHHHHHHHHHIIIIIIIIIIII"                   
+    + "JJJJJJJJJJJJKKKKKKKKKKKKLLLLLLLLLLLLMMMMMMMMMMMMNNNNNNNNNNNN"                   
+    + "PPPPPPPPPPPPQQQQQQQQQQQQRRRRRRRRRRRRSSSSSSSSSSSSTTTTTTTTTTTT"                   
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    + "                                                            "                    
+    //+ "            $+-&$+-&$+-&00024000000000000000210000000       "                   
+    + "            $+-&$+-&$+-&00024000000000000100010000000       "                   
+    + "707K27   K3#K8 O50O70O90707K3#   010707K3#   190701K39   L02"                   
+    + "K01K3#010O90701K39   L22K41K3#   O90703L36L50M7361 M80      "                   
+    + "527K3#K32L6060 K60K60L70707K27   K3#K8 O50O70O90K21K3#x10O90"                   
+    + "547x10K3#N30 47K00K3#N30703M26M40M7361 M80      527K3#K32M50"                   
+    + "60 L80L80M60999M70      61 M80      561K39P30N10127P31K3#K3#"                   
+    + "61 M70      117K39K3#K3#61 M70                  991N40      "                    
+    + "            992N60                  993N80                  "                   
+    + "994O00                  991O20                  991O40      "                   
+    + "            991O60                  991O80                  "                    
+    + "991P00                  991P20      010                     "           
     ;
 
 this.console_message = {} ;
 
-this.memory = new Uint8Array (memory_size).fill (0x30) ;
+this.memory = new Uint8Array (memory_size).fill (BCD_ZONE) ;
 this.processor_halt = false ;
 this.processor_fault = false ;
+this.io_pending = "" ;
 this.single_instruction = false ;
 this.memory_display_idx = 0 ;
 this.wait = 0 ;
@@ -397,72 +166,79 @@ this.current_instruction =      // Used by op handlers
     } ;
 this.bcd =
     [
-    {ascii: "0"} ,              // 0x00
-    {ascii: "1"} ,
-    {ascii: "2"} ,
-    {ascii: "3"} ,
-    {ascii: "4"} ,
-    {ascii: "5"} ,
-    {ascii: "6"} ,
-    {ascii: "7"} ,
-    {ascii: "8"} ,
-    {ascii: "9"} ,
-    {ascii: "#"} ,
-    {ascii: "@"} ,
-    {ascii: "?"} ,
-    {ascii: ":"} ,
-    {ascii: ">"} ,
-    {ascii: ASCII_GEQ} ,
-    {ascii: "+"} ,              // 0x10
-    {ascii: "A"} ,
-    {ascii: "B"} ,
-    {ascii: "C"} ,
-    {ascii: "D"} ,
-    {ascii: "E"} ,
-    {ascii: "F"} ,
-    {ascii: "G"} ,
-    {ascii: "H"} ,
-    {ascii: "I"} ,
-    {ascii: "."} ,
-    {ascii: "["} ,
-    {ascii: "&"} ,
-    {ascii: "("} ,
-    {ascii: "<"} ,
-    {ascii: GROUP_MARK} ,   // control <-
-    {ascii: "x"} ,          // Control  0x20        
-    {ascii: "J"} ,
-    {ascii: "K"} ,
-    {ascii: "L"} ,
-    {ascii: "M"} ,
-    {ascii: "N"} ,
-    {ascii: "O"} ,
-    {ascii: "P"} ,
-    {ascii: "Q"} ,
-    {ascii: "R"} ,
-    {ascii: "$"} ,
-    {ascii: "*"} ,
-    {ascii: "-"} ,
-    {ascii: ")"} ,
-    {ascii: ";"} ,
-    {ascii: ASCII_LEQ} ,
-    {ascii: " "} ,              // 0x30
-    {ascii: "/"} ,
-    {ascii: "S"} ,
-    {ascii: "T"} ,
-    {ascii: "U"} ,
-    {ascii: "V"} ,
-    {ascii: "W"} ,
-    {ascii: "X"} ,
-    {ascii: "Y"} ,
-    {ascii: "Z"} ,
-    {ascii: ","} ,
-    {ascii: "%"} ,
-    {ascii: ASCII_NEQ} ,
-    {ascii: "="} ,
-    {ascii: "]"} ,
-    {ascii: '"'}    // Double quote
+    {ascii: "0", seq: 0x30} ,              // 0x00
+    {ascii: "1", seq: 0x31} ,
+    {ascii: "2", seq: 0x32} ,
+    {ascii: "3", seq: 0x33} ,
+    {ascii: "4", seq: 0x34} ,
+    {ascii: "5", seq: 0x35} ,
+    {ascii: "6", seq: 0x36} ,
+    {ascii: "7", seq: 0x37} ,
+    {ascii: "8", seq: 0x38} ,
+    {ascii: "9", seq: 0x39} ,
+    {ascii: "#", seq: 0x3a} ,
+    {ascii: "@", seq: 0x3b} ,
+    {ascii: "?", seq: 0x3c} ,
+    {ascii: ":", seq: 0x3d} ,
+    {ascii: ">", seq: 0x3e} ,
+    {ascii: ASCII_GEQ, seq: 0x3f} ,
+    {ascii: "+", seq: 0x00} ,              // 0x10
+    {ascii: "A", seq: 0x01} ,
+    {ascii: "B", seq: 0x02} ,
+    {ascii: "C", seq: 0x03} ,
+    {ascii: "D", seq: 0x04} ,
+    {ascii: "E", seq: 0x05} ,
+    {ascii: "F", seq: 0x06} ,
+    {ascii: "G", seq: 0x07} ,
+    {ascii: "H", seq: 0x08} ,
+    {ascii: "I", seq: 0x09} ,
+    {ascii: ".", seq: 0x0a} ,
+    {ascii: "[", seq: 0x0b} ,
+    {ascii: "&", seq: 0x0c} ,
+    {ascii: "(", seq: 0x0d} ,
+    {ascii: "<", seq: 0x0e} ,
+    {ascii: GROUP_MARK, seq: 0x0f} ,   // control <-
+    {ascii: "x", seq: 0x10} ,          // Control  0x20        
+    {ascii: "J", seq: 0x11} ,
+    {ascii: "K", seq: 0x12} ,
+    {ascii: "L", seq: 0x13} ,
+    {ascii: "M", seq: 0x14} ,
+    {ascii: "N", seq: 0x15} ,
+    {ascii: "O", seq: 0x16} ,
+    {ascii: "P", seq: 0x17} ,
+    {ascii: "Q", seq: 0x18} ,
+    {ascii: "R", seq: 0x19} ,
+    {ascii: "$", seq: 0x1a} ,
+    {ascii: "*", seq: 0x1b} ,
+    {ascii: "-", seq: 0x1c} ,
+    {ascii: ")", seq: 0x1d} ,
+    {ascii: ";", seq: 0x1e} ,
+    {ascii: ASCII_LEQ, seq: 0x1f} ,
+    {ascii: " ", seq: 0x20} ,              // 0x30
+    {ascii: "/", seq: 0x21} ,
+    {ascii: "S", seq: 0x22} ,
+    {ascii: "T", seq: 0x23} ,
+    {ascii: "U", seq: 0x24} ,
+    {ascii: "V", seq: 0x25} ,
+    {ascii: "W", seq: 0x26} ,
+    {ascii: "X", seq: 0x27} ,
+    {ascii: "Y", seq: 0x28} ,
+    {ascii: "Z", seq: 0x29} ,
+    {ascii: ",", seq: 0x2a} ,
+    {ascii: "%", seq: 0x2b} ,
+    {ascii: ASCII_NEQ, seq: 0x2c} ,
+    {ascii: "=", seq: 0x2d} ,
+    {ascii: "]", seq: 0x2e} ,
+    {ascii: '"', seq: 0x2f}    // Double quote
     ] ;
 this.ascii_to_bcd = new Uint8Array (64) ;    // Built in initialize
+
+this.disk = new B500Disk
+    (
+    240 ,			// Segment size (120,240,480)
+    240000 ,			// Disk character size
+    this			// My processor reference
+    ) ;
 
 this.initialize () ;
 
@@ -473,7 +249,7 @@ this.initialize () ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.initialize = function ()
 {
-var idx ;
+let idx ;
 
 this.console_initialize () ;
 this.update_power_on_light (true) ;
@@ -507,6 +283,7 @@ this.bcd [0x09].op_function = this.halt_operation.bind (this) ;     // "9"
 this.bcd [0x0A].op_function = this.card_read_operation.bind (this) ; // "#"
 this.bcd [0x11].op_function = this.print_operation.bind (this) ;	// "A"
 this.bcd [0x21].op_function = this.address_modify_operation.bind (this) ; // "J"
+this.bcd [0x22].op_function = this.disk_operation.bind (this) ;	    // "K"
 this.bcd [0x24].op_function = this.data_compress_operation.bind (this) ; // "M"
 this.bcd [0x25].op_function = this.data_expand_operation.bind (this) ; // "N"
 this.bcd [0x27].op_function = this.transfer_zone_operation.bind (this) ; // "P"
@@ -532,7 +309,7 @@ this.console_refresh () ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.console_initialize = function ()
 {
-var init = {'action':'console_update' ,
+let init = {'action':'console_update' ,
 	    'updates': []} ;
 this.console_message = init ;
 
@@ -587,9 +364,9 @@ this.console_update ({'id':'instruction_display',
 //------------------------------------------------------------------------------
 B500Processor.prototype.memory_data_display = function (address)
 {
-var memory_slice ;
-var bit_idx ;
-var parity_bit = 1 ;	    // Start at odd
+let memory_slice ;
+let bit_idx ;
+let parity_bit = 1 ;	    // Start at odd
 
 this.memory_display_idx = this.address_to_index (address) ;
 memory_slice = this.memory.slice (this.memory_display_idx,
@@ -676,6 +453,22 @@ this.console_update ({'id':'central_processor_light',
 } // update_central_processor_light //
 
 //------------------------------------------------------------------------------
+// update_indicator_light
+//------------------------------------------------------------------------------
+B500Processor.prototype.update_indicator_light = function
+    (
+    indicator ,
+    light_on
+    )
+{
+
+this.console_update ({'id':indicator,
+			"value":light_on} ,
+		    true);
+
+} // update_indicator_light //
+
+//------------------------------------------------------------------------------
 // set_conditional
 //------------------------------------------------------------------------------
 B500Processor.prototype.set_conditional = function
@@ -698,21 +491,32 @@ else
 } // set_conditional //
 
 //------------------------------------------------------------------------------
+// set_next_instruction
+//------------------------------------------------------------------------------
+B500Processor.prototype.set_next_instruction = function
+    (addr)		// address of next instruction
+{
+
+this.instruction_idx_next = this.address_to_index (addr) ;
+
+} // set_next_instruction //
+
+//------------------------------------------------------------------------------
 // index_to_address
 //------------------------------------------------------------------------------
 B500Processor.prototype.index_to_address = function (idx)
 {
-var section = 0x00 ;
-var field = 0x00 ;
-var character = 0x00 ;
-var idx_mod_4800 ;
-var test_val ;
-var address ;
+let section = 0x00 ;
+let field = 0x00 ;
+let character = 0x00 ;
+let idx_mod_4800 ;
+let test_val ;
+let address ;
 
 idx_mod_4800 = idx % 4800 ;
 
 test_val = Math.floor (idx_mod_4800 / 1200) ;
-section |= (test_val << 4) & 0x30 ;
+section |= (test_val << 4) & BCD_ZONE ;
 test_val = Math.floor ((idx_mod_4800 % 1200) / 120) ;
 section |= test_val & 0x0F ;
 
@@ -740,10 +544,10 @@ return (address) ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.address_to_index = function (address)
 {
-var section = address [0] & 0x3F ;
-var field = address [1] & 0x3F ;
-var character = address [2] & 0x3F ;
-var idx = 0 ;
+let section = address [0] & 0x3F ;
+let field = address [1] & 0x3F ;
+let character = address [2] & 0x3F ;
+let idx = 0 ;
 
 if ((section & 0x0F) > 9)
     {
@@ -758,7 +562,7 @@ if ((character & 0x0F) > 11)
     return (-1) ;
     }
 
-idx += ((section & 0x30) >>> 4) * (1200) ;
+idx += ((section & BCD_ZONE) >>> 4) * (1200) ;
 idx += (section & 0x0F) * 120 ;
 
 if (field & 0x20)                       // field B bit
@@ -791,9 +595,9 @@ B500Processor.prototype.bcd_to_integer = function
     bcd_length
     )
 {
-var int_ret = 0 ;
-var mem_idx = this.address_to_index (addr) ;
-var bcd_count ;
+let int_ret = 0 ;
+let mem_idx = this.address_to_index (addr) ;
+let bcd_count ;
 
 if (bcd_length <= 0)
     {
@@ -803,7 +607,7 @@ if (bcd_length <= 0)
 for (bcd_count = 0 ; bcd_count < bcd_length ; bcd_count++)
     {
     int_ret *= 10 ;
-    int_ret += this.memory [mem_idx] & 0x0f ;
+    int_ret += this.memory [mem_idx] & BCD_NUMERIC ;
     mem_idx++ ;
     }
 if (this.memory [mem_idx - 1] & 0x20)		// B bit sign
@@ -825,13 +629,13 @@ B500Processor.prototype.integer_to_bcd = function
     bcd_length
     )
 {
-var int_work = Math.abs (int_in) ;
-var mem_idx = (this.address_to_index (addr) + bcd_length) - 1 ;
-var bcd_count ;
+let int_work = Math.abs (int_in) ;
+let mem_idx = (this.address_to_index (addr) + bcd_length) - 1 ;
+let bcd_count ;
 
 for (bcd_count = 0 ; bcd_count < bcd_length ; bcd_count++)
     {
-    this.memory [mem_idx] = (int_work % 10) & 0x0f ;
+    this.memory [mem_idx] = (int_work % 10) & BCD_NUMERIC ;
     int_work = Math.floor (int_work / 10) ;
     mem_idx-- ;
     }
@@ -854,15 +658,20 @@ B500Processor.prototype.compare_characters = function
     bit_pattern		// 0x3f - char, 0x0f - num, 0x30 - zone
     )
 {
-var from_idx = this.address_to_index (from_addr) ;
-var to_idx = this.address_to_index (to_addr) ;
-var comp_count ;
-var comp_result = 0 ;
+let from_idx = this.address_to_index (from_addr) ;
+let to_idx = this.address_to_index (to_addr) ;
+let comp_count ;
+let comp_result = 0 ;
+
+//self.postMessage ({action:'alert','alert':'compare_characters:entry'}) ;
+//this.mem_dump_message (from_addr, comp_length) ;
+//this.mem_dump_message (to_addr, comp_length) ;
 
 for (comp_count = 0 ; comp_count < comp_length ; comp_count++)
     {
-    comp_result = (this.memory [from_idx] & bit_pattern)
-		- (this.memory [to_idx] & bit_pattern) ;
+    comp_result = (this.bcd [this.memory [from_idx] & BCD_CHAR].seq & bit_pattern)
+    		- (this.bcd [this.memory [to_idx] & BCD_CHAR].seq & bit_pattern) ;
+//self.postMessage ({action:'alert','alert':'comp_result:' + comp_result.toString()}) ;
     if (comp_result != 0)
 	{
 	break ;		// not equal
@@ -872,6 +681,7 @@ for (comp_count = 0 ; comp_count < comp_length ; comp_count++)
     }
 
 this.set_conditional (comp_result) ;
+//self.postMessage ({action:'alert','alert':'compare_characters:exit:' + comp_result.toString()}) ;
 
 } // compare_characters //
 
@@ -886,8 +696,8 @@ B500Processor.prototype.transfer_characters = function
     bit_pattern
     )
 {
-var from_idx = this.address_to_index (from_addr) ;
-var to_idx = this.address_to_index (to_addr) ;
+let from_idx = this.address_to_index (from_addr) ;
+let to_idx = this.address_to_index (to_addr) ;
 
 for ( ; xfer_length > 0 ; xfer_length--)
     {
@@ -913,8 +723,8 @@ B500Processor.prototype.import_ascii = function
     xfer_length
     )
 {
-var to_idx = this.address_to_index (to_addr) ;
-var from_idx = 0 ;
+let to_idx = this.address_to_index (to_addr) ;
+let from_idx = 0 ;
 
 for ( ; xfer_length > 0 ; xfer_length--)
     {
@@ -932,8 +742,8 @@ return (xfer_length) ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.increase_address_and_read_button = function ()
 {
-var mem_idx = this.memory_display_idx += 1 ;
-var mem_addr ;
+let mem_idx = this.memory_display_idx += 1 ;
+let mem_addr ;
 
 if (mem_idx >= this.memory_size)
     {
@@ -987,7 +797,7 @@ this.run () ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.clear_button = function ()
 {
-var addr ;
+let addr ;
 
 this.processor_halt = true ;
 this.single_instruction = false ;
@@ -1081,6 +891,7 @@ if (this.processor_halt)
     return ;
     }
 
+this.update_central_processor_light (true) ;
 this.instruction_idx = this.instruction_idx_next ;          // New current instruction
 this.instruction_idx_next = this.instruction_idx + instruction_length ;
 
@@ -1103,6 +914,11 @@ this.console_refresh () ;
 
 this.current_instruction.microseconds = 0 ;	// execution time us
 this.bcd [this.current_instruction.op].op_function () ;
+
+if (this.io_pending)
+    {
+    return ;
+    }
 if (this.single_instruction)
     {
     this.enter_wait () ;
@@ -1118,11 +934,11 @@ setTimeout (this.run_next, this.wait) ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.add_operation = function ()
 {
-var addend_length = this.current_instruction.m & 0x0f ;
-var augend_length = this.current_instruction.n & 0x0f ;
-var addend ;
-var augend ;
-var sum ;
+let addend_length = this.current_instruction.m & BCD_NUMERIC ;
+let augend_length = this.current_instruction.n & BCD_NUMERIC ;
+let addend ;
+let augend ;
+let sum ;
 
 if (addend_length <= 0)
     {
@@ -1137,6 +953,10 @@ if (augend_length <= 0)
 augend = this.bcd_to_integer (this.current_instruction.bbb,
 				augend_length) ;
 
+//self.postMessage ({action:'alert','alert':'add_operation:entry'}) ;
+//this.mem_dump_message (this.current_instruction.aaa, addend_length) ;
+//this.mem_dump_message (this.current_instruction.bbb, augend_length) ;
+
 sum = augend + addend ;
 
 this.integer_to_bcd (sum ,
@@ -1146,6 +966,8 @@ this.integer_to_bcd (sum ,
 this.set_conditional (sum) ;
 
 this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+//this.mem_dump_message (this.current_instruction.ccc, Math.max (addend_length, augend_length)) ;
+//self.postMessage ({action:'alert','alert':'add_operation:exit'}) ;
 
 } // add_operation //
 
@@ -1154,14 +976,14 @@ this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.address_modify_operation = function ()
 {
-var increment ;
-var addr_idx ;
-var mod_addr ;
-var mod_addr_idx ;
+let increment ;
+let addr_idx ;
+let mod_addr ;
+let mod_addr_idx ;
 
-increment = (((this.current_instruction.aaa[0] & 0x0f) * 10)
-            + (this.current_instruction.aaa[1] & 0x0f)) * 12
-            + (this.current_instruction.aaa[2] & 0x0f) ;
+increment = (((this.current_instruction.aaa[0] & BCD_NUMERIC) * 10)
+            + (this.current_instruction.aaa[1] & BCD_NUMERIC)) * 12
+            + (this.current_instruction.aaa[2] & BCD_NUMERIC) ;
 if (increment == 0)
     {
     increment = 1200 ;
@@ -1193,26 +1015,26 @@ B500Processor.prototype.branch_operation = function ()
 
 if (this.current_instruction.m & 0x01)
     {				    // Branch unconditional
-    this.instruction_idx_next
-	= this.address_to_index (this.current_instruction.aaa) ;
+    this.set_next_instruction (this.current_instruction.aaa) ;
     this.current_instruction.microseconds += 42 ;
     }
 else
     {				    // Branch conditional
+//self.postMessage ({action:'alert','alert':"branch_cond"}) ;
     if (this.conditional & CONDITION_LOW)
 	{
-	this.instruction_idx_next
-	    = this.address_to_index (this.current_instruction.aaa) ;
+//self.postMessage ({action:'alert','alert':"branch_cond:low"}) ;
+    	this.set_next_instruction (this.current_instruction.aaa) ;
 	}
     else if (this.conditional & CONDITION_HIGH)
 	{
-	this.instruction_idx_next
-	    = this.address_to_index (this.current_instruction.ccc) ;
+//self.postMessage ({action:'alert','alert':"branch_cond:high"}) ;
+    	this.set_next_instruction (this.current_instruction.ccc) ;
 	}
     else //if (this.conditional & CONDITION_EQUAL)
 	{
-	this.instruction_idx_next
-	    = this.address_to_index (this.current_instruction.bbb) ;
+//self.postMessage ({action:'alert','alert':"branch_cond:eql"}) ;
+    	this.set_next_instruction (this.current_instruction.bbb) ;
 	}
     this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
     }
@@ -1220,56 +1042,42 @@ else
 } // branch_operation //
 
 //------------------------------------------------------------------------------
-// card_read_operation
-//------------------------------------------------------------------------------
-B500Processor.prototype.card_read_operation = function ()
-{
-//var not_ready_idx = this.address_to_index (this.current_instruction.aaa) ;
-//var eof_idx = this.address_to_index (this.current_instruction.bbb) ;
-var input_idx = this.address_to_index (this.current_instruction.ccc) ;
-
-
-this.set_conditional (0) ;
-
-this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
-
-} // card_read_operation //
-
-//------------------------------------------------------------------------------
 // compare_operation
 //------------------------------------------------------------------------------
 B500Processor.prototype.compare_operation = function ()
 {
-var comp_length = this.current_instruction.n & 0x0f ;
-var bit_pattern ;	// 0x3f - char, 0x0f - num, 0x30 - zone
-var branch_type = 1 ;	// 1 - equal, 2 - unequal
+let comp_length = this.current_instruction.n & BCD_NUMERIC ;
+let bit_pattern ;	// 0x3f - char, 0x0f - num, 0x30 - zone
+let branch_type = 1 ;	// 1 - equal, 2 - unequal from M variant
 
 if (comp_length <= 0)
     {
     comp_length = 12 ;
     }
 
-switch (this.current_instruction.m & 0x0f)
+//this.mem_dump_message (this.current_instruction.aaa, comp_length) ;
+//this.mem_dump_message (this.current_instruction.bbb, comp_length) ;
+switch (this.current_instruction.m & BCD_NUMERIC)
     {
     case 0x00 :			// char =
-	bit_pattern = 0x3f ;
+	bit_pattern = BCD_CHAR ;
 	break ;
     case 0x01 :			// zone =
-	bit_pattern = 0x30 ;
+	bit_pattern = BCD_ZONE ;
 	break ;
     case 0x02 :			// num =
-	bit_pattern = 0x0f ;
+	bit_pattern = BCD_NUMERIC ;
 	break ;
     case 0x04 :			// char !=
-	bit_pattern = 0x3f ;
+	bit_pattern = BCD_CHAR ;
 	branch_type = 2 ;
 	break ;
     case 0x05 :			// zone !=
-	bit_pattern = 0x30 ;
+	bit_pattern = BCD_ZONE ;
 	branch_type = 2 ;
 	break ;
     case 0x06 :			// num !=
-	bit_pattern = 0x0f ;
+	bit_pattern = BCD_NUMERIC ;
 	branch_type = 2 ;
 	break ;
     default :
@@ -1277,27 +1085,29 @@ switch (this.current_instruction.m & 0x0f)
 	break ;
     }
 
-
 this.compare_characters
     (
-    this.address_to_index (this.current_instruction.aaa) ,
-    this.address_to_index (this.current_instruction.bbb) ,
-    comp_length ,
-    bit_pattern
+    this.current_instruction.aaa ,		// compare from address
+    this.current_instruction.bbb ,		// compare to address
+    comp_length ,				// compare character length
+    bit_pattern					// char, zone, or numeric
     ) ;
 
+//self.postMessage ({action:'alert','alert':"comp cond:" + this.conditional.toString() }) ;
 if (branch_type == 1)		// Branch if required
     {
     if (this.conditional & CONDITION_EQUAL)
         {			// Equal branch
+//self.postMessage ({action:'alert','alert':"comp op: EQUAL exit"}) ;
 	this.instruction_idx_next
 	    = this.address_to_index (this.current_instruction.ccc) ;
         }
     }
 else
     {
-    if (this.conditional & (! CONDITION_EQUAL))
+    if (this.conditional & CONDITION_UNEQUAL)
         {			// Unequal branch
+//self.postMessage ({action:'alert','alert':"comp op: UNEQUAL exit"}) ;
 	this.instruction_idx_next
 	    = this.address_to_index (this.current_instruction.ccc) ;
         }
@@ -1312,12 +1122,12 @@ this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.data_compress_operation = function ()
 {
-var from_idx = this.address_to_index (this.current_instruction.aaa) ;
-var to_idx = this.address_to_index (this.current_instruction.ccc) ;
-var record_length = ((this.current_instruction.bbb[0] & 0x0f) * 120)
-					+ ((this.current_instruction.bbb[1] & 0x0f) * 12) 
-					+ (this.current_instruction.bbb[1] & 0x0f) ;
-var from_end_idx = from_idx + record_length ;
+let from_idx = this.address_to_index (this.current_instruction.aaa) ;
+let to_idx = this.address_to_index (this.current_instruction.ccc) ;
+let record_length = ((this.current_instruction.bbb[0] & BCD_NUMERIC) * 120)
+					+ ((this.current_instruction.bbb[1] & BCD_NUMERIC) * 12) 
+					+ (this.current_instruction.bbb[1] & BCD_NUMERIC) ;
+let from_end_idx = from_idx + record_length ;
 
 while (from_idx < from_end_idx)
 	{
@@ -1329,11 +1139,11 @@ while (from_idx < from_end_idx)
 		this.memory [to_idx] &= (this.memory [from_idx] >> 2) & 0x03 ;
 		to_idx++ ;
 		this.memory [to_idx] = 0x00 ;
-		this.memory [to_idx] &= (this.memory [from_idx] << 4) & 0x30 ;
+		this.memory [to_idx] &= (this.memory [from_idx] << 4) & BCD_ZONE ;
 		from_idx ++ ;
 		if (from_idx < from_end_idx)
 			{
-			this.memory [to_idx] &= (this.memory [from_idx]) & 0x0f ;
+			this.memory [to_idx] &= (this.memory [from_idx]) & BCD_NUMERIC ;
 			to_idx++ ;
 			from_idx ++ ;
 			}
@@ -1351,17 +1161,17 @@ this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.data_expand_operation = function ()
 {
-var from_idx = this.address_to_index (this.current_instruction.aaa) ;
-var to_idx = this.address_to_index (this.current_instruction.ccc) ;
-var record_length = ((this.current_instruction.bbb[0] & 0x0f) * 120)
-					+ ((this.current_instruction.bbb[1] & 0x0f) * 12) 
-					+ (this.current_instruction.bbb[1] & 0x0f) ;
-var to_end_idx = to_idx + record_length ;
+let from_idx = this.address_to_index (this.current_instruction.aaa) ;
+let to_idx = this.address_to_index (this.current_instruction.ccc) ;
+let record_length = ((this.current_instruction.bbb[0] & BCD_NUMERIC) * 120)
+					+ ((this.current_instruction.bbb[1] & BCD_NUMERIC) * 12) 
+					+ (this.current_instruction.bbb[1] & BCD_NUMERIC) ;
+let to_end_idx = to_idx + record_length ;
 
 while (to_idx < to_end_idx)
 	{
 	this.memory [to_idx] = 0x00 ;
-	this.memory [to_idx] &= (this.memory [from_idx] >> 2) & 0x0f ;
+	this.memory [to_idx] &= (this.memory [from_idx] >> 2) & BCD_NUMERIC ;
 	to_idx++ ;
 	if (to_idx < to_end_idx)
 		{
@@ -1373,7 +1183,7 @@ while (to_idx < to_end_idx)
 		if (to_idx < to_end_idx)
 			{
 			this.memory [to_idx] = 0x00 ;
-			this.memory [to_idx] &= this.memory [from_idx] & 0x0f ;
+			this.memory [to_idx] &= this.memory [from_idx] & BCD_NUMERIC ;
 			to_idx++ ;
 			from_idx++ ;
 			}
@@ -1391,13 +1201,13 @@ this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.divide_operation = function ()
 {
-var dividend_length = this.current_instruction.m & 0x0f ;
-var divisor_length = this.current_instruction.n & 0x0f ;
-var quotient_length ;
-var dividend ;
-var divisor ;
-var quotient ;
-var remainder ;
+let dividend_length = this.current_instruction.m & BCD_NUMERIC ;
+let divisor_length = this.current_instruction.n & BCD_NUMERIC ;
+let quotient_length ;
+let dividend ;
+let divisor ;
+let quotient ;
+let remainder ;
 
 if (dividend_length <= 0)
     {
@@ -1470,17 +1280,17 @@ B500Processor.prototype.fiscal_mask = function
     b_decimal
     )
 {
-var from_idx = this.address_to_index (this.current_instruction.aaa) ;
-var from_end_idx ;
-var mask_idx = this.address_to_index (this.current_instruction.bbb) ;
-var mask_end_idx ;
-var to_idx = this.address_to_index (this.current_instruction.ccc) ;
-var to_end_idx ;
-var from_length = this.current_instruction.m & 0x0f ;
-var b_blank = this.ascii_to_bcd [' '] ;
-var b_dollar = this.ascii_to_bcd ['$'] ;
-var mask_char = ' ' ;
-var insert_all = false ;
+let from_idx = this.address_to_index (this.current_instruction.aaa) ;
+let from_end_idx ;
+let mask_idx = this.address_to_index (this.current_instruction.bbb) ;
+let mask_end_idx ;
+let to_idx = this.address_to_index (this.current_instruction.ccc) ;
+let to_end_idx ;
+let from_length = this.current_instruction.m & BCD_NUMERIC ;
+let b_blank = this.ascii_to_bcd [' '] ;
+let b_dollar = this.ascii_to_bcd ['$'] ;
+let mask_char = ' ' ;
+let insert_all = false ;
 
 if (from_length > 11)
     {
@@ -1501,7 +1311,7 @@ while (from_idx < from_end_idx
 	&& mask_idx < mask_end_idx
 	&& to_idx < to_end_idx)
     {
-    if ((this.memory [from_idx] & 0x0f) != 0x00)
+    if ((this.memory [from_idx] & BCD_NUMERIC) != 0x00)
 	{
 	insert_all = true ;
 	}
@@ -1525,7 +1335,7 @@ while (from_idx < from_end_idx
 	    }
 	else
 	    {
-	    this.memory [to_idx] = this.memory [from_idx] & 0x0f ;
+	    this.memory [to_idx] = this.memory [from_idx] & BCD_NUMERIC ;
             from_idx++ ;
 	    }
 	}
@@ -1574,13 +1384,13 @@ this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.alphanumeric_mask = function ()
 {
-var from_idx = this.address_to_index (this.current_instruction.aaa) ;
-var from_end_idx ;
-var mask_idx = this.address_to_index (this.current_instruction.bbb) ;
-var to_idx = this.address_to_index (this.current_instruction.ccc) ;
-var to_end_idx ;
-var from_length = this.current_instruction.m & 0x0f ;
-var b_amp = this.ascii_to_bcd ['&'] ;
+let from_idx = this.address_to_index (this.current_instruction.aaa) ;
+let from_end_idx ;
+let mask_idx = this.address_to_index (this.current_instruction.bbb) ;
+let to_idx = this.address_to_index (this.current_instruction.ccc) ;
+let to_end_idx ;
+let from_length = this.current_instruction.m & BCD_NUMERIC ;
+let b_amp = this.ascii_to_bcd ['&'] ;
 
 if (from_length > 11)
     {
@@ -1622,10 +1432,10 @@ this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.mask_operation = function ()
 {
-var b_comma = this.ascii_to_bcd [','] ;
-var b_decimal = this.ascii_to_bcd ['.'] ;
+let b_comma = this.ascii_to_bcd [','] ;
+let b_decimal = this.ascii_to_bcd ['.'] ;
 
-switch (this.current_instruction.n & 0x0f)
+switch (this.current_instruction.n & BCD_NUMERIC)
     {
     case 0 :					// fiscal standard
 	this.fiscal_mask (b_comma, b_decimal) ;
@@ -1645,11 +1455,11 @@ switch (this.current_instruction.n & 0x0f)
 //------------------------------------------------------------------------------
 B500Processor.prototype.multiply_operation = function ()
 {
-var multiplicand_length = this.current_instruction.m & 0x0f ;
-var multiplier_length = this.current_instruction.n & 0x0f ;
-var multiplicand ;
-var multiplier ;
-var product ;
+let multiplicand_length = this.current_instruction.m & BCD_NUMERIC ;
+let multiplier_length = this.current_instruction.n & BCD_NUMERIC ;
+let multiplicand ;
+let multiplier ;
+let product ;
 
 if (multiplicand_length <= 0)
     {
@@ -1691,9 +1501,9 @@ this.current_instruction.microseconds += 10 ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.print_operation = function ()
 {
-//var not_ready_idx = this.address_to_index (this.current_instruction.aaa) ;
-//var eof_idx = this.address_to_index (this.current_instruction.bbb) ;
-//var input_idx = this.address_to_index (this.current_instruction.ccc) ;
+//let not_ready_idx = this.address_to_index (this.current_instruction.aaa) ;
+//let eof_idx = this.address_to_index (this.current_instruction.bbb) ;
+//let input_idx = this.address_to_index (this.current_instruction.ccc) ;
 
 
 this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
@@ -1705,9 +1515,9 @@ this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.spo_print = function ()
 {
-var output_idx = this.address_to_index (this.current_instruction.aaa) ;
-var text_out = '' ;
-var mess = {'action':'spo'} ;
+let output_idx = this.address_to_index (this.current_instruction.aaa) ;
+let text_out = '' ;
+let mess = {'action':'spo'} ;
 //this.inst_dump_message () ;
 
 while (text_out.length <= 80)
@@ -1730,8 +1540,8 @@ this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.spo_read = function ()
 {
-var input_branch_idx = this.address_to_index (this.current_instruction.bbb) ;
-var output_idx = this.address_to_index (this.current_instruction.ccc) ;
+let input_branch_idx = this.address_to_index (this.current_instruction.bbb) ;
+let output_idx = this.address_to_index (this.current_instruction.ccc) ;
 
 
 //this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
@@ -1744,7 +1554,7 @@ var output_idx = this.address_to_index (this.current_instruction.ccc) ;
 B500Processor.prototype.spo_operation = function ()
 {
 
-switch (this.current_instruction.m & 0x0f)
+switch (this.current_instruction.m & BCD_NUMERIC)
     {
     case 1 :					// spo print
 	this.spo_print () ;
@@ -1764,11 +1574,11 @@ this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.subtract_operation = function ()
 {
-var minuend_length = this.current_instruction.m & 0x0f ;
-var subtrahend_length = this.current_instruction.n & 0x0f ;
-var minuend ;
-var subtrahend ;
-var difference ;
+let minuend_length = this.current_instruction.m & BCD_NUMERIC ;
+let subtrahend_length = this.current_instruction.n & BCD_NUMERIC ;
+let minuend ;
+let subtrahend ;
+let difference ;
 
 if (minuend_length <= 0)
     {
@@ -1800,9 +1610,9 @@ this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.transfer_operation = function ()
 {
-var fields = this.current_instruction.m & 0x0f ;
-var chars = this.current_instruction.n & 0x0f ;
-var length ;
+let fields = this.current_instruction.m & BCD_NUMERIC ;
+let chars = this.current_instruction.n & BCD_NUMERIC ;
+let length ;
 // validate m/n
 
 length = (fields * 12) + chars ;
@@ -1816,7 +1626,7 @@ this.transfer_characters
     this.current_instruction.aaa ,
     this.current_instruction.ccc ,
     length ,
-    0x3f
+    BCD_CHAR
     ) ;
 
 if (this.current_instruction.n & 0x20)	// N var B bit
@@ -1834,8 +1644,8 @@ this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 //------------------------------------------------------------------------------
 B500Processor.prototype.transfer_zone_operation = function ()
 {
-var fields = this.current_instruction.m & 0x0f ;
-var chars = this.current_instruction.n & 0x0f ;
+let fields = this.current_instruction.m & BCD_NUMERIC ;
+let chars = this.current_instruction.n & BCD_NUMERIC ;
 
 // validate m/n
 
@@ -1850,7 +1660,7 @@ this.transfer_characters
     this.current_instruction.aaa ,
     this.current_instruction.ccc ,
     (fields * 12) + chars ,
-    0x30
+    BCD_ZONE
     ) ;
 
 if (this.current_instruction.n & 0x20)	// N var B bit
@@ -1873,6 +1683,187 @@ this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
 
 } // invalid_operation //
 
+//##############################################################################
+// input/output functions
+//##############################################################################
+
+//------------------------------------------------------------------------------
+// io_output_initialize
+//------------------------------------------------------------------------------
+B500Processor.prototype.io_output_initialize = function
+    (
+    device
+    )
+{
+let io_message =
+    {
+    "action" : "io_output" ,
+    "device" : device ,
+    "status" : 0 ,
+    "data" : ""
+    } ;
+
+switch (device)
+    {
+    case "punch" :
+	break ;
+    case "printer" :
+	break ;
+    case "disk" :
+	break ;
+    default:
+	break ;
+    }
+
+this.io_pending = device ;
+return (io_message) ;
+
+} // io_output_initialize //
+
+//------------------------------------------------------------------------------
+// io_input_initialize
+//------------------------------------------------------------------------------
+B500Processor.prototype.io_input_initialize = function
+    (
+    device
+    )
+{
+let io_message =
+    {
+    "action" : "io_input" ,
+    "device" : device ,
+    "status" : 0
+    } ;
+
+switch (device)
+    {
+    case "card" :
+	io_message.buffer = 1 ;
+	break ;
+    case "disk" :
+	break ;
+    default:
+	break ;
+    }
+
+this.io_pending = device ;
+return (io_message) ;
+
+} // io_input_initialize //
+
+//------------------------------------------------------------------------------
+// card_read_operation
+//------------------------------------------------------------------------------
+B500Processor.prototype.card_read_operation = function ()
+{
+let io_message = this.io_input_initialize ("card") ;
+
+
+self.postMessage (io_message) ;
+
+
+this.set_conditional (0) ;
+
+//this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+
+} // card_read_operation //
+
+//------------------------------------------------------------------------------
+// card_punch_operation
+//------------------------------------------------------------------------------
+B500Processor.prototype.card_punch_operation = function ()
+{
+let io_message = this.io_output_initialize ("punch") ;
+
+
+self.postMessage (io_message) ;
+
+
+this.set_conditional (0) ;
+
+//this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+
+} // card_punch_operation //
+
+//------------------------------------------------------------------------------
+// printer_operation
+//------------------------------------------------------------------------------
+B500Processor.prototype.printer_operation = function ()
+{
+let io_message = this.io_output_initialize ("printer") ;
+
+
+self.postMessage (io_message) ;
+
+
+this.set_conditional (0) ;
+
+//this.current_instruction.microseconds += DEFAULT_INSTRUCTION_MICROSECONDS ;
+
+} // printer_operation //
+
+//------------------------------------------------------------------------------
+// disk_operation
+//------------------------------------------------------------------------------
+B500Processor.prototype.disk_operation = function ()
+{
+let segment ;
+let segment_cnt ;
+let mem_idx ;
+let result = {error : DISK_NOT_READY} ;
+
+this.update_indicator_light ('disk_file_data_com_light', true) ;
+
+switch (this.current_instruction.m & BCD_NUMERIC)
+    {
+    case 0 :
+	segment = this.bcd_to_integer
+	    (
+            this.current_instruction.aaa ,
+	    7 
+	    ) ;
+	segment_cnt = this.current_instruction.n & BCD_NUMERIC ;
+	memory_idx = this.address_to_index (this.current_instruction.bbb) ;
+	result = this.disk.write (segment, segment_cnt, memory_idx) ;
+        break ;
+    case 2 :
+	segment = this.bcd_to_integer
+	    (
+            this.current_instruction.aaa ,
+	    7 
+	    ) ;
+	segment_cnt = this.current_instruction.n & BCD_NUMERIC ;
+	memory_idx = this.address_to_index (this.current_instruction.bbb) ;
+	result = this.disk.read (segment, segment_cnt, memory_idx) ;
+//this.mem_dump_message (this.current_instruction.bbb, 30) ;
+	break ;
+    case 4 :
+//self.postMessage ({action:'alert','alert':"DFC"}) ;
+	segment = this.bcd_to_integer
+	    (
+            this.current_instruction.aaa ,
+	    7 
+	    ) ;
+	segment_cnt = this.current_instruction.n & BCD_NUMERIC ;
+	result = this.disk.check (segment, segment_cnt) ;
+        break ;
+    case 8 :
+//self.postMessage ({action:'alert','alert':"DFI"}) ;
+	result = this.disk.interrogate () ;
+        break ;
+    default :
+        break ;
+    }
+
+
+//this.wait = 200 ;
+
+} // disk_operation //
+
+//##############################################################################
+// Debug/Utility functions
+//##############################################################################
+
 //------------------------------------------------------------------------------
 // mem_dump_message
 //------------------------------------------------------------------------------
@@ -1882,10 +1873,10 @@ B500Processor.prototype.mem_dump_message = function
     len
     )
 {
-var mess = {'action':'memdump'} ;
-var text = '' ;
-var idx ;
-var mem_idx = this.address_to_index (addr) ;
+let mess = {'action':'memdump'} ;
+let text = '' ;
+let idx ;
+let mem_idx = this.address_to_index (addr) ;
 
 for (idx = 0 ; idx < addr.length ; idx++)
     {
@@ -1918,12 +1909,12 @@ this.mem_dump_message (this.current_instruction.address, 12) ;
 
 //##############################################################################
 
-var processor = new B500Processor ;
+let processor = new B500Processor ;
 
 //self.addEventListener('message', function(e)
 onmessage = function(e)
 {
-var data = e.data;
+let data = e.data;
 
 switch (data.action)
     {
@@ -1969,5 +1960,4 @@ switch (data.action)
       self.postMessage('Unknown command');
   }
 }
-//}, false);
 

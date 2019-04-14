@@ -68,9 +68,6 @@ switch (data.action)
 		}
 	    }
 	break ;
-    case 'hello':
-	//alert ('hello') ;
-	break ;
     case 'panel_light':
 	//alert (data.id) ;
 	switch (data.id)
@@ -91,18 +88,26 @@ switch (data.action)
 		break ;
 	    }
       	break;
+    case 'io_input':
+	break ;
+    case 'io_output':
+	break ;
+    case 'io_interrogate':
+	break ;
     case 'alert':
 	alert ('listener alert:' + data.alert) ;
 	break ;
     case 'memdump':
 	alert (data.text) ;
 	break ;
+    case 'hello':
+	//alert ('hello') ;
+	break ;
     default:
       	alert ('Unknown command' + data.action);
     }
 
 }
-//}, false);
 
 worker.postMessage({'action':'hello'});
 
@@ -337,13 +342,15 @@ worker.postMessage({"action":"button_pressed",
 
 } // continue_pressed //
 
+//##############################################################################
+// IO handlers
+//##############################################################################
 
-function run_it ()
-{
+function run_it () { }
 
-
-}
-
+//------------------------------------------------------------------------------
+// ready
+//------------------------------------------------------------------------------
 $(document).ready ()
 {
 //alert ('ready') ;
